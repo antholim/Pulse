@@ -1,0 +1,52 @@
+name: Task
+description: A technical task that belongs to a user story
+title: "[Task] <short name>"
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Add the same **feature label** and **Iteration milestone** as the parent story, and **assign yourself**.
+
+  - type: input
+    id: parent
+    attributes:
+      label: Parent story
+      placeholder: "#12"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be done
+    validations:
+      required: true
+
+  - type: input
+    id: ideal-time
+    attributes:
+      label: Ideal time estimate (hours)
+      placeholder: "4"
+    validations:
+      required: true
+
+  - type: input
+    id: actual-time
+    attributes:
+      label: Actual time (fill in when closing)
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      value: |
+        - [ ] Code merged through a reviewed PR
+        - [ ] Unit tests written and passing in CI
+        - [ ] Docs / wiki updated if needed
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Links
+      description: Commits, PRs, diagrams, discussions.
