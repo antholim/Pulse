@@ -22,19 +22,19 @@ label() { # name, color, description
 }
 
 echo "Milestones (Iterations)…"
-milestone "Iteration 1"                  2026-10-06 "Foundation: repo/board/wiki setup, tech stack, architecture, UDM v0, source selection, walking skeleton."
-milestone "Iteration 2"                  2026-10-20 "One source end-to-end: connector #1 + CSV/JSON import, UDM v1, normalization + Tier 1 matching, sync snapshots, CI."
-milestone "Iteration 3"                  2026-11-03 "Connector #2, Tier 2 fuzzy matching with confidence, change detection, activity score v1, Evidence View v1, labelled eval set."
-milestone "Iteration 4 (Release 1)"      2026-11-17 "MVP slice, all MUSTs: trend detection, dashboard with evidence links, integration tests, deployment, demo video."
-milestone "Iteration 5"                  2026-12-01 "R1 feedback, search & filters, incremental sync, manual review of possible matches."
-milestone "Iteration 6"                  2026-12-15 "Entity profiles, historical timeline, configurable scoring, test coverage (lighter: finals)."
-milestone "Iteration 7"                  2027-01-19 "Alerts & watchlists, performance (pagination/indexing), ER tuning round 2."
-milestone "Iteration 8 (Release 2)"      2027-02-05 "All SHOULDs complete and deployed, updated ER evaluation, stakeholder demo."
-milestone "Iteration 9"                  2027-02-16 "R2 feedback, prioritize COULDs with stakeholder, Reports v1."
-milestone "Iteration 10"                 2027-03-02 "PULSE API, topic classification, relationship mapping."
-milestone "Iteration 11"                 2027-03-16 "AI summaries / Ask PULSE (stretch), administration & configuration."
-milestone "Iteration 12"                 2027-03-30 "Feature freeze: bug fixing, performance, security review, final docs."
-milestone "Iteration 13 (Final Release)" 2027-04-13 "Final release, final presentation, peer evaluations, stakeholder feedback."
+milestone "Iteration 1"                  2026-10-06 
+milestone "Iteration 2"                  2026-10-20 
+milestone "Iteration 3"                  2026-11-03 
+milestone "Iteration 4 (Release 1)"      2026-11-17 
+milestone "Iteration 5"                  2026-12-01 
+milestone "Iteration 6"                  2026-12-15 
+milestone "Iteration 7"                  2027-01-19 
+milestone "Iteration 8 (Release 2)"      2027-02-05 
+milestone "Iteration 9"                  2027-02-16 
+milestone "Iteration 10"                 2027-03-02 
+milestone "Iteration 11"                 2027-03-16 
+milestone "Iteration 12"                 2027-03-30 
+milestone "Iteration 13 (Final Release)" 2027-04-13 
 
 echo "Feature labels…"
 F=1D76DB
