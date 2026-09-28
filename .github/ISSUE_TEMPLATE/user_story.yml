@@ -1,0 +1,133 @@
+name: User Story
+description: A user story for a PULSE feature (As a..., I want..., so that...)
+title: "[Story] <short name>"
+labels: ["user story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before submitting:** in the right sidebar, add the **feature label** (e.g. `Entity Resolution`), the **priority** and **risk** labels, the **Iteration milestone** if you plan to work on it, and **assign yourself**.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      description: As user X, I want to do Y, so I can accomplish Z.
+      placeholder: As an ecosystem analyst, I want to see which companies were added since the last sync, so I can spot new activity quickly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Conditions that must be true for the story to be done.
+      placeholder: |
+        - [ ] Given two sync snapshots, new records are listed as "added"
+        - [ ] Each listed change links to its source record
+    validations:
+      required: true
+
+  - type: dropdown
+    id: points
+    attributes:
+      label: Story points
+      options: ["1", "2", "3", "5", "8", "13"]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority / value
+      description: MoSCoW priority from the project proposal.
+      options:
+        - "High (MUST)"
+        - "Medium (SHOULD)"
+        - "Low (COULD)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      options: ["High", "Medium", "Low"]
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk-notes
+    attributes:
+      label: Risk notes
+      description: What could go wrong or block this story? Link to the Risks wiki page if relevant.
+
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Feature
+      description: Also add the matching feature label in the sidebar.
+      options:
+        - Data Connectors
+        - Entity Resolution
+        - Unified Data Model
+        - Change Tracking
+        - Activity Scoring
+        - Trend Detection
+        - Dashboard
+        - Source & Evidence View
+        - Search & Filters
+        - Manual Match Review
+        - Alerts & Watchlists
+        - Entity Profiles
+        - Historical Timeline
+        - Reports
+        - PULSE API
+        - Topic Classification
+        - Relationship Mapping
+        - AI Summaries
+        - Admin & Configuration
+        - DevOps & CI
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks and ideal time
+      description: Break the story into tasks. Put the ideal time estimate (hours) on each. Create a Task issue for bigger ones and link it here.
+      value: |
+        - [ ] Task 1 (_h)
+        - [ ] Task 2 (_h)
+        - [ ] Unit tests (_h)
+
+        **Total ideal time:** _h
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests
+    attributes:
+      label: Unit tests
+      description: Which tests cover this story? Link the test files or PR once written.
+      placeholder: tests/analytics/test_change_detection.py
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Links
+      description: Commits, PRs, architecture diagrams, meeting minutes / discussion summaries, wiki pages.
+      placeholder: |
+        - PR: #
+        - Diagram:
+        - Discussion:
+
+  - type: checkboxes
+    id: signoff
+    attributes:
+      label: Customer sign-off
+      description: Tick when the stakeholder (Simon Lauzier, deRabane) accepts the story, then add the `customer signoff` label.
+      options:
+        - label: Accepted by the stakeholder
+        - label: Unit tests written and passing
