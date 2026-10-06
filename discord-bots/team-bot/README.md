@@ -18,6 +18,7 @@ open pull requests. This is team tooling, not part of the PULSE product.
 | `/run deadlines [force]` | Run the deadline reminder job now. |
 | `/run meeting-reminders [force]` | Run the meeting reminder job now. |
 | `/run pr-summary` | Post the open PR summary to the channel now. |
+| `/help` | List every command with its options (only you see it). |
 | `/ping` | Check the bot is online. |
 
 Automatic posts, all in the reminders channel unless configured otherwise:
@@ -192,7 +193,9 @@ handle Discord interactions; `tests/test_bot_commands.py` still loads every cog 
 the command tree.
 
 To add a command, create a cog in `cogs/` with an async `setup(bot)` function and add its
-module path to `EXTENSIONS` in `bot.py`. To add a scheduled job, put its body in a method
+module path to `EXTENSIONS` in `bot.py`. `/help` lists commands automatically from the command tree:
+give every command a `description`, and add a new cog's class name to `HELP_SECTIONS` in
+`formatting.py` (a test fails if either is missing). To add a scheduled job, put its body in a method
 that returns a list of what it posted, call it from the loop, and add a `/run` subcommand
 in `cogs/run.py`.
 

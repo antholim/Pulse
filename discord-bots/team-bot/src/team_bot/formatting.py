@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date, datetime, time
 
 from team_bot.domain.iterations import Iteration, Milestone, ReleaseWindow
 from team_bot.domain.meetings import Meeting
@@ -11,6 +12,65 @@ from team_bot.domain.worklog import MemberSummary, WorkLog, summarize
 from team_bot.services.github import PullRequest
 
 DISCORD_DESCRIPTION_LIMIT = 4096
+DISCORD_FIELD_LIMIT = 1024
+
+# /help sections, in display order, keyed by the cog class that owns the commands.
+HELP_SECTIONS = {
+    "WorkLogCog": "Work logging",
+    "MeetingsCog": "Meetings",
+    "PRSummaryCog": "GitHub",
+    "RunCog": "Run a scheduled job now",
+    "General": "General",
+}
+OTHER_SECTION = "Other"
+
+
+@dataclass(frozen=True)
+class CommandHelp:
+    name: str  # qualified name, e.g. "meeting schedule"
+    description: str
+    params: tuple[tuple[str, bool], ...]  # (name, required)
+    cog: str  # class name of the cog that owns the command
+
+
+def command_usage(command: CommandHelp) -> str:
+    """`/log description hours [issue] [day]`: optional options in brackets."""
+    parts = [f"/{command.name}"]
+    parts += [name if required else f"[{name}]" for name, required in command.params]
+    return " ".join(parts)
+
+
+def help_sections(commands: Sequence[CommandHelp]) -> list[tuple[str, str]]:
+    """Group commands into (section title, text) pairs in HELP_SECTIONS order."""
+    grouped: dict[str, list[CommandHelp]] = {}
+    for command in commands:
+        grouped.setdefault(HELP_SECTIONS.get(command.cog, OTHER_SECTION), []).append(command)
+
+    order = [*HELP_SECTIONS.values(), OTHER_SECTION]
+    sections = []
+    for title in order:
+        if title not in grouped:
+            continue
+        lines = [
+            f"`{command_usage(c)}`\n{c.description}"
+            for c in sorted(grouped[title], key=lambda c: c.name)
+        ]
+        sections.append((title, truncate("\n".join(lines), DISCORD_FIELD_LIMIT)))
+    return sections
+
+
+def automatic_posts(pr_summary_time: time | None) -> str:
+    lines = [
+        "- Deadline reminders 3 days and 1 day before each milestone",
+        "- Meeting reminders 1 day and 1 hour before",
+    ]
+    if pr_summary_time is None:
+        lines.append("- Daily open PR summary: turned off")
+    else:
+        lines.append(
+            f"- Open PR summary every day at {pr_summary_time:%H:%M}, when PRs are waiting"
+        )
+    return "\n".join(lines)
 
 
 def hours(value: float) -> str:

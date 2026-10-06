@@ -129,3 +129,36 @@ def test_contributions_markdown_groups_by_iteration(iterations):
 
 def test_contributions_markdown_empty(iterations):
     assert "No work logged yet" in formatting.contributions_markdown([], iterations, REPO)
+
+
+def test_command_usage_brackets_optional_options():
+    command = formatting.CommandHelp(
+        "meeting schedule", "Schedule", (("title", True), ("link", False)), "MeetingsCog"
+    )
+    assert formatting.command_usage(command) == "/meeting schedule title [link]"
+    assert formatting.command_usage(formatting.CommandHelp("ping", "x", (), "General")) == "/ping"
+
+
+def test_help_sections_order_and_unknown_cog():
+    commands = [
+        formatting.CommandHelp("ping", "Check the bot", (), "General"),
+        formatting.CommandHelp("unlog", "Delete an entry", (("entry", True),), "WorkLogCog"),
+        formatting.CommandHelp("log", "Log work", (("hours", True),), "WorkLogCog"),
+        formatting.CommandHelp("mystery", "New thing", (), "SomeNewCog"),
+    ]
+    sections = formatting.help_sections(commands)
+    assert [title for title, _ in sections] == ["Work logging", "General", "Other"]
+    assert sections[0][1] == "`/log hours`\nLog work\n`/unlog entry`\nDelete an entry"
+
+
+def test_help_sections_truncate_long_fields():
+    many = [formatting.CommandHelp(f"c{i}", "x" * 200, (), "General") for i in range(10)]
+    ((_, text),) = formatting.help_sections(many)
+    assert len(text) == formatting.DISCORD_FIELD_LIMIT and text.endswith("…")
+
+
+def test_automatic_posts():
+    from datetime import time
+
+    assert "every day at 21:00" in formatting.automatic_posts(time(21, 0))
+    assert "turned off" in formatting.automatic_posts(None)
