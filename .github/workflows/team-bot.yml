@@ -1,0 +1,30 @@
+name: team-bot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "discord-bots/team-bot/**"
+      - ".github/workflows/team-bot.yml"
+  pull_request:
+    paths:
+      - "discord-bots/team-bot/**"
+      - ".github/workflows/team-bot.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discord-bots/team-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: discord-bots/team-bot/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest --cov --cov-report=term-missing --cov-fail-under=90
