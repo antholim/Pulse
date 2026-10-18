@@ -5,6 +5,11 @@ __pycache__/
 venv/
 .pytest_cache/
 
+# Node.js
+node_modules/
+dist/
+coverage/
+
 # Environment variables and secrets
 .env
 .env.*
