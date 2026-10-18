@@ -1,12 +1,19 @@
 
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Keep the virtual environment outside the app directory
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency definitions first
+COPY pyproject.toml uv.lock ./
 
+# Install production dependencies
+RUN uv sync --locked --no-dev --no-install-project
+
+# Copy FastAPI application
 COPY app ./app
 
 EXPOSE 8000
