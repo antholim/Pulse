@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: ^frontend/tsconfig.*\.json$
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Requires `npm ci` in frontend/ so the hooks use the project's pinned tool versions.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier (frontend)
+        language: system
+        entry: node frontend/node_modules/prettier/bin/prettier.cjs --write --ignore-unknown
+        files: ^frontend/
+        exclude: ^frontend/package-lock\.json$
+        types: [text]
+      - id: eslint
+        name: eslint (frontend)
+        language: system
+        entry: node frontend/node_modules/eslint/bin/eslint.js --fix --max-warnings=0
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$

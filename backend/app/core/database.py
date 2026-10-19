@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 
@@ -31,6 +30,4 @@ def get_db():
 
 def check_database():
     with engine.connect() as connection:
-        return connection.execute(
-            text("SELECT 1")
-        ).scalar_one()
+        return connection.execute(text("SELECT 1")).scalar_one()
