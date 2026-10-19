@@ -158,7 +158,36 @@ def create_app(
 
         app.get(path, name=f"list_{kind}")(list_items)
 
+    def detail_route(kind: str, path: str):
+        def get_item(item_id: str, tenant: Annotated[TenantData, Depends(current_tenant)]):
+            # Contents come back in full here, including the Profiles block.
+            for record in tenant.resources[kind]:
+                if record["id"] == item_id:
+                    return {"data": record}
+            raise HTTPException(404, f"Not found: {item_id!r}")
+
+        app.get(f"{path}/{{item_id}}", name=f"get_{kind}")(get_item)
+
     for kind, path in LIST_PATHS.items():
         list_route(kind, path)
+        detail_route(kind, path)
+
+    participants_path = f"{API}/community/events/{{event_id}}/participants/people"
+
+    @app.get(participants_path)
+    def event_participants(
+        event_id: str,
+        tenant: Annotated[TenantData, Depends(current_tenant)],
+        before: str | None = None,
+        after: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    ):
+        if event_id not in tenant.participants:
+            raise HTTPException(404, f"No event {event_id!r}")
+        people_by_id = {p["id"]: p for p in tenant.resources["people"]}
+        people = [people_by_id[pid] for pid in tenant.participants[event_id]]
+        base = participants_path.format(event_id=event_id)
+        window, meta = paginate(people, before, after, limit, base)
+        return {"data": window, "assocs": {}, "meta": meta}
 
     return app

@@ -171,3 +171,64 @@ def test_content_list_returns_summaries_with_category_assocs(mock_omerlo, header
     assert all("blocks" not in c for c in body["data"])
     linked = {cid for c in body["data"] for cid in c["category_ids"]}
     assert {c["id"] for c in body["assocs"]["categories"]} == linked
+
+
+# ------------------------------------------------------- detail and nested
+
+
+def test_content_detail_includes_the_profiles_block(mock_omerlo, headers, mock_tenants):
+    content = next(
+        c
+        for c in mock_tenants[0].resources["contents"]
+        if any(b["kind"] == "profiles" for b in c["blocks"])
+    )
+
+    response = mock_omerlo.get(f"{LIST_PATHS['contents']}/{content['id']}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"data": content}
+
+
+@pytest.mark.parametrize("kind", list(LIST_PATHS))
+def test_every_resource_can_be_read_by_id(mock_omerlo, headers, mock_tenants, kind):
+    record = mock_tenants[0].resources[kind][0]
+
+    response = mock_omerlo.get(f"{LIST_PATHS[kind]}/{record['id']}", headers=headers)
+
+    assert response.json()["data"] == record
+
+
+def test_unknown_or_other_tenant_id_gets_404(mock_omerlo, headers, mock_tenants):
+    other_tenant_org = mock_tenants[1].resources["organizations"][0]["id"]
+
+    assert mock_omerlo.get(f"{ORGS}/unknown", headers=headers).status_code == 404
+    assert mock_omerlo.get(f"{ORGS}/{other_tenant_org}", headers=headers).status_code == 404
+
+
+def test_detail_requires_a_token(mock_omerlo, headers, mock_tenants):
+    org = mock_tenants[0].resources["organizations"][0]["id"]
+    no_token = {k: v for k, v in headers.items() if k != "Authorization"}
+
+    assert mock_omerlo.get(f"{ORGS}/{org}", headers=no_token).status_code == 401
+
+
+def test_event_participants_are_paginated_people(mock_omerlo, headers, mock_tenants):
+    tenant = mock_tenants[0]
+    event_id = max(tenant.participants, key=lambda e: len(tenant.participants[e]))
+    path = f"{LIST_PATHS['events']}/{event_id}/participants/people"
+
+    people = fetch_all(mock_omerlo, path, headers, limit=3)
+
+    assert {p["id"] for p in people} == set(tenant.participants[event_id])
+    assert all("first_name" in p for p in people)
+
+
+def test_unknown_event_participants_get_404(mock_omerlo, headers):
+    path = f"{LIST_PATHS['events']}/unknown/participants/people"
+
+    assert mock_omerlo.get(path, headers=headers).status_code == 404
+
+
+def test_ground_truth_is_not_served(mock_omerlo, headers):
+    for path in ("/api/media/v1/ground_truth", "/ground_truth.dev_only.json"):
+        assert mock_omerlo.get(path, headers=headers).status_code == 404
