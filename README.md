@@ -76,3 +76,35 @@ cd frontend
 npm run lint
 npm run format
 ```
+
+## Tests
+
+| Area     | Framework                     | Mocking                         | Coverage                    |
+| -------- | ----------------------------- | ------------------------------- | --------------------------- |
+| Backend  | pytest                        | pytest-mock, respx (HTTP calls) | pytest-cov, branch coverage |
+| Frontend | Vitest, React Testing Library | Vitest (`vi.mock`, `vi.fn`)     | Vitest with v8              |
+
+Tests mirror the source layout: `backend/tests/core/` tests `backend/app/core/`, and frontend tests sit next to the file they test (`App.test.tsx`). Coverage must stay above 50 percent; core logic modules aim for 80 percent.
+
+```bash
+cd backend
+uv run pytest                       # unit tests; integration tests are skipped
+uv run pytest --cov                 # with the coverage report
+
+cd frontend
+npm test                            # all tests once
+npm run test:watch                  # rerun on change
+npm run coverage                    # with the coverage report
+```
+
+### Integration tests
+
+Backend tests marked `integration` (in `backend/tests/integration/`) run against a real PostgreSQL. They are skipped unless `TEST_DATABASE_URL` is set:
+
+```bash
+docker compose --profile test up -d test-db
+cd backend
+TEST_DATABASE_URL=postgresql+psycopg://pulse_test:pulse_test@localhost:5433/pulse_test uv run pytest -m integration
+```
+
+The `test-db` service keeps its data in memory, so every start is a clean database.
