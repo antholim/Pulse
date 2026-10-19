@@ -92,3 +92,79 @@ async def test_service_lists_open_pull_requests():
     prs = await service.open_pull_requests()
     assert [pr.number for pr in prs] == [43, 50]
     assert rest.calls[0][3]["state"] == "open"  # the JS bot sent the invalid "opened"
+
+
+class FakeRoutingClient:
+    """githubkit stand-in for the review routing calls: records calls, serves pages."""
+
+    def __init__(self, files_pages=(), graphql=None):
+        self.calls = []
+        self._files_pages = list(files_pages)
+        self._graphql = graphql or {}
+        self.rest = SimpleNamespace(
+            pulls=SimpleNamespace(
+                async_list_files=self._record("files", lambda: self._files_pages.pop(0)),
+                async_request_reviewers=self._record("request", lambda: {}),
+            ),
+        )
+
+    def _record(self, name, body):
+        async def call(*args, **kwargs):
+            self.calls.append((name, args, kwargs))
+            data = body()
+            return SimpleNamespace(json=lambda: data)
+
+        return call
+
+    async def async_graphql(self, query, variables):
+        self.calls.append(("graphql", variables))
+        return self._graphql
+
+
+def routing_service(client):
+    return gh.GitHubService(client, "antholim", "Pulse")
+
+
+def test_pull_request_labels_and_updated_at():
+    pr = gh.pull_request_from_json(
+        PR_JSON | {"labels": [{"name": "data"}], "updated_at": "2026-10-19T10:00:00Z"}
+    )
+    assert pr.labels == ("data",)
+    assert pr.updated_at == utc("2026-10-19T10:00:00")
+    assert gh.pull_request_from_json(PR_JSON).labels == ()
+
+
+async def test_service_changed_files_follows_pages_and_renames():
+    full_page = [{"filename": f"f{n}.py"} for n in range(gh.PAGE_SIZE)]
+    last_page = [{"filename": "new/x.py", "previous_filename": "old/x.py"}]
+    client = FakeRoutingClient(files_pages=[full_page, last_page])
+    files = await routing_service(client).changed_files(12)
+    assert len(files) == gh.PAGE_SIZE + 2
+    assert files[-2:] == ["new/x.py", "old/x.py"]
+    assert [call[2]["page"] for call in client.calls] == [1, 2]
+
+
+async def test_service_closing_issue_labels():
+    graphql = {
+        "repository": {
+            "pullRequest": {
+                "closingIssuesReferences": {
+                    "nodes": [
+                        {"labels": {"nodes": [{"name": "data"}, {"name": "Release 1"}]}},
+                        {"labels": {"nodes": [{"name": "infra"}]}},
+                    ]
+                }
+            }
+        }
+    }
+    client = FakeRoutingClient(graphql=graphql)
+    assert await routing_service(client).closing_issue_labels(12) == ["data", "Release 1", "infra"]
+    assert client.calls[0] == ("graphql", {"owner": "antholim", "repo": "Pulse", "number": 12})
+    empty = FakeRoutingClient(graphql={"repository": {"pullRequest": None}})
+    assert await routing_service(empty).closing_issue_labels(12) == []
+
+
+async def test_service_request_reviewers():
+    client = FakeRoutingClient()
+    await routing_service(client).request_reviewers(12, ["bob"])
+    assert client.calls == [("request", ("antholim", "Pulse", 12), {"reviewers": ["bob"]})]

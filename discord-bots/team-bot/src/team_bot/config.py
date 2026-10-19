@@ -50,6 +50,9 @@ class Settings:
     reminder_hour: int
     db_path: Path
     releases: tuple[Release, ...]
+    review_routing_channel_id: int = 0
+    review_routing_seconds: int | None = None  # None: review routing is off
+    review_teams_path: Path = Path("review-teams.toml")
 
     @property
     def repo_owner(self) -> str:
@@ -100,6 +103,11 @@ class Settings:
 
         role = optional("PR_SUMMARY_ROLE_ID")
         summary_channel = optional("PR_SUMMARY_CHANNEL_ID") or reminders_channel
+        routing_channel = optional("REVIEW_ROUTING_CHANNEL_ID") or summary_channel
+        routing_raw = optional("REVIEW_ROUTING_SECONDS", "60")
+        routing_seconds = _to_int("REVIEW_ROUTING_SECONDS", routing_raw) if routing_raw else 0
+        if routing_seconds and routing_seconds < 30:
+            raise ConfigError("REVIEW_ROUTING_SECONDS must be at least 30 (or 0 to turn it off)")
 
         return cls(
             discord_token=discord_token,
@@ -114,6 +122,9 @@ class Settings:
             reminder_hour=reminder_hour,
             db_path=Path(optional("DB_PATH", "data/team-bot.db")),
             releases=parse_releases(optional("RELEASES", DEFAULT_RELEASES)),
+            review_routing_channel_id=_to_int("REVIEW_ROUTING_CHANNEL_ID", routing_channel),
+            review_routing_seconds=routing_seconds or None,
+            review_teams_path=Path(optional("REVIEW_TEAMS_PATH", "review-teams.toml")),
         )
 
 

@@ -8,11 +8,13 @@ from datetime import date, datetime, time
 
 from team_bot.domain.iterations import Iteration, Milestone, ReleaseWindow
 from team_bot.domain.meetings import Meeting
+from team_bot.domain.review_teams import TeamMatch
 from team_bot.domain.worklog import MemberSummary, WorkLog, summarize
 from team_bot.services.github import PullRequest
 
 DISCORD_DESCRIPTION_LIMIT = 4096
 DISCORD_FIELD_LIMIT = 1024
+DISCORD_TITLE_LIMIT = 256
 
 # /help sections, in display order, keyed by the cog class that owns the commands.
 HELP_SECTIONS = {
@@ -59,7 +61,7 @@ def help_sections(commands: Sequence[CommandHelp]) -> list[tuple[str, str]]:
     return sections
 
 
-def automatic_posts(pr_summary_time: time | None) -> str:
+def automatic_posts(pr_summary_time: time | None, review_routing: bool = False) -> str:
     lines = [
         "- Deadline reminders 3 days and 1 day before each milestone",
         "- Meeting reminders 1 day and 1 hour before",
@@ -70,6 +72,10 @@ def automatic_posts(pr_summary_time: time | None) -> str:
         lines.append(
             f"- Open PR summary every day at {pr_summary_time:%H:%M}, when PRs are waiting"
         )
+    if review_routing:
+        lines.append("- Review pings to the team a PR concerns, once it is ready for review")
+    else:
+        lines.append("- PR review pings: turned off")
     return "\n".join(lines)
 
 
@@ -186,6 +192,42 @@ def pr_summary(prs: Sequence[PullRequest], now: datetime) -> tuple[str, str]:
             line += " · waiting on " + ", ".join(pr.requested_reviewers)
         lines.append(line)
     return f"Open PRs: {len(ready)} ready for review", truncate("\n\n".join(lines))
+
+
+def match_reason(match: TeamMatch) -> str:
+    """Why a team was picked: `label X`, `backend/app/x.py and 2 more files`."""
+    parts = []
+    if match.labels:
+        word = "label" if len(match.labels) == 1 else "labels"
+        parts.append(f"{word} " + ", ".join(f"`{label}`" for label in match.labels))
+    if match.files:
+        text = f"`{match.files[0]}`"
+        if len(match.files) > 1:
+            more = len(match.files) - 1
+            text += f" and {more} more file" + ("s" if more > 1 else "")
+        parts.append(text)
+    return " · ".join(parts)
+
+
+def review_request(pr: PullRequest, matches: Sequence[TeamMatch]) -> tuple[str, str, str]:
+    """Return (content, embed title, embed description) for the Discord review ping.
+
+    Teams with a Discord role are mentioned; the others are named in bold.
+    """
+    teams = [
+        f"<@&{m.team.discord_role_id}>" if m.team.discord_role_id else f"**{m.team.name}**"
+        for m in matches
+    ]
+    content = " ".join(teams) + " review requested"
+    title = truncate(f"#{pr.number}: {pr.title}", DISCORD_TITLE_LIMIT)
+    lines = [f"by {pr.author}", ""]
+    lines += [f"**{m.team.name}**: {match_reason(m)}" for m in matches]
+    return content, title, truncate("\n".join(lines))
+
+
+def routing_result(pr: PullRequest, matches: Sequence[TeamMatch]) -> str:
+    """One line per routed PR in the /run reply."""
+    return f"#{pr.number} {pr.title}: " + ", ".join(m.team.name for m in matches)
 
 
 def _md_cell(text: str) -> str:

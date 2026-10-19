@@ -62,7 +62,10 @@ class General(commands.Cog):
             embed.add_field(name=title, value=text, inline=False)
         embed.add_field(
             name="Automatic posts",
-            value=formatting.automatic_posts(self.bot.settings.pr_summary_time),
+            value=formatting.automatic_posts(
+                self.bot.settings.pr_summary_time,
+                review_routing=self.bot.settings.review_routing_seconds is not None,
+            ),
             inline=False,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

@@ -1,0 +1,96 @@
+# Which team reviews which pull requests (issue #76).
+#
+# The team bot checks GitHub every minute. For each open PR that is ready for review it
+# finds every team below that matches it and, once per team per PR:
+#   - pings the team's Discord role,
+#   - requests a review from the team's members on GitHub (never the PR author; needs a
+#     GitHub token with Pull requests: write, otherwise only the ping is sent).
+#
+# A team matches when one of its labels is on the PR or on an issue the PR closes
+# ("Closes #12"), or when the PR changes a file under one of its paths.
+# A PR that matches no team is left alone.
+#
+# Paths are relative to the repository root:
+#   "frontend/"       everything under that folder
+#   "compose.yaml"    that file only
+#   "**/Dockerfile"   a Dockerfile in any folder ("*" stays within a folder, "**" crosses them)
+#
+# This file also generates .github/CODEOWNERS. After editing it, restart the bot and run
+# from discord-bots/team-bot:
+#   python -m team_bot.codeowners
+# The team-bot tests fail if CODEOWNERS is out of date.
+#
+# discord_role_id: in Discord, with Developer Mode on, go to Server Settings > Roles,
+# right-click the role and Copy Role ID. Without it the message names the team but
+# pings nobody.
+
+[teams.data]
+name = "Data team"
+# discord_role_id = 0
+members = []
+labels = [
+  "data",
+  "Data Connectors",
+  "Entity Resolution",
+  "Unified Data Model",
+  "Activity Scoring",
+  "Change Tracking",
+  "Trend Detection",
+  "Manual Match Review",
+  "Topic Classification",
+  "Relationship Mapping",
+]
+paths = [
+  "backend/app/ingestion/",
+  "backend/app/processing/",
+  "backend/app/models/",
+  "backend/app/storage/",
+  "backend/synthetic/",
+  "backend/tests/synthetic/",
+]
+
+[teams.swe]
+name = "SWE team"
+# discord_role_id = 0
+members = []
+labels = [
+  "swe",
+  "Dashboard",
+  "Source & Evidence View",
+  "Search & Filters",
+  "Entity Profiles",
+  "Historical Timeline",
+  "Reports",
+  "PULSE API",
+  "Alerts & Watchlists",
+  "Admin & Configuration",
+  "AI Summaries",
+]
+paths = [
+  "frontend/",
+  "backend/app/api/",
+  "backend/app/schemas/",
+  "backend/app/services/",
+  "backend/app/ai/",
+  "backend/app/main.py",
+]
+
+[teams.infra]
+name = "Infra team"
+# discord_role_id = 0
+members = []
+labels = [
+  "infra",
+  "DevOps & CI",
+]
+paths = [
+  ".github/",
+  "discord-bots/",
+  "scripts/",
+  "backend/app/core/",
+  "**/Dockerfile",
+  "**/.dockerignore",
+  "compose.yaml",
+  ".pre-commit-config.yaml",
+  "ruff.toml",
+]

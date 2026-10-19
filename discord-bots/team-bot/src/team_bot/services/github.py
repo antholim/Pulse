@@ -1,4 +1,4 @@
-"""Small GitHub REST client: milestones and open pull requests.
+"""Small GitHub client: milestones, open pull requests and what review routing needs.
 
 Responses are mapped from raw JSON into our own dataclasses, so the rest of the
 bot (and the tests) never depend on githubkit's models.
@@ -17,6 +17,7 @@ from team_bot.config import GitHubAuth
 from team_bot.domain.iterations import Milestone
 
 MILESTONE_CACHE_SECONDS = 600
+PAGE_SIZE = 100
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ class PullRequest:
     draft: bool
     created_at: datetime
     requested_reviewers: tuple[str, ...]
+    labels: tuple[str, ...] = ()
+    updated_at: datetime | None = None
 
 
 class GitHubReader(Protocol):
@@ -36,6 +39,27 @@ class GitHubReader(Protocol):
     async def milestones(self) -> list[Milestone]: ...
 
     async def open_pull_requests(self) -> list[PullRequest]: ...
+
+    # Review routing (#76)
+
+    async def changed_files(self, number: int) -> list[str]: ...
+
+    async def closing_issue_labels(self, number: int) -> list[str]: ...
+
+    async def request_reviewers(self, number: int, logins: list[str]) -> None: ...
+
+
+CLOSING_ISSUE_LABELS_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      closingIssuesReferences(first: 20) {
+        nodes { labels(first: 50) { nodes { name } } }
+      }
+    }
+  }
+}
+"""
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -67,6 +91,8 @@ def pull_request_from_json(data: dict[str, Any]) -> PullRequest:
         draft=bool(data.get("draft")),
         created_at=created,
         requested_reviewers=tuple(reviewers),
+        labels=tuple(label["name"] for label in data.get("labels") or []),
+        updated_at=_parse_datetime(data.get("updated_at")),
     )
 
 
@@ -102,3 +128,34 @@ class GitHubService:
             self._owner, self._repo, state="open", per_page=100
         )
         return [pull_request_from_json(item) for item in response.json()]
+
+    async def changed_files(self, number: int) -> list[str]:
+        files: list[str] = []
+        page = 1
+        while True:
+            response = await self._client.rest.pulls.async_list_files(
+                self._owner, self._repo, number, per_page=PAGE_SIZE, page=page
+            )
+            batch = response.json()
+            files += [item["filename"] for item in batch]
+            # A renamed file belongs to the folder it left as well as the one it moved to.
+            files += [item["previous_filename"] for item in batch if item.get("previous_filename")]
+            if len(batch) < PAGE_SIZE:
+                return files
+            page += 1
+
+    async def closing_issue_labels(self, number: int) -> list[str]:
+        """Labels of the issues this PR closes ("Closes #12" in the description)."""
+        data = await self._client.async_graphql(
+            CLOSING_ISSUE_LABELS_QUERY,
+            {"owner": self._owner, "repo": self._repo, "number": number},
+        )
+        pull = (data.get("repository") or {}).get("pullRequest") or {}
+        issues = (pull.get("closingIssuesReferences") or {}).get("nodes") or []
+        return [label["name"] for issue in issues for label in issue["labels"]["nodes"]]
+
+    async def request_reviewers(self, number: int, logins: list[str]) -> None:
+        """Needs a token with Pull requests: write."""
+        await self._client.rest.pulls.async_request_reviewers(
+            self._owner, self._repo, number, reviewers=logins
+        )
