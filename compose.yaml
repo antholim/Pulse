@@ -64,6 +64,25 @@ services:
       - "8000"
       - --reload
 
+  # Mock Omerlo Reader API serving synthetic data (backend/synthetic/README.md)
+  mock-omerlo:
+    profiles: ["full", "mock"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8100:8100"
+    volumes:
+      - ./backend/synthetic:/app/synthetic
+    command:
+      - python
+      - -m
+      - synthetic.mock_omerlo
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8100"
+
   # React + Vite frontend
   frontend:
     profiles: ["full"]

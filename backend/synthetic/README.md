@@ -56,3 +56,34 @@ Some pairs still share a domain, LinkedIn URL or CRM id (Tier 1 can find them); 
 `omerlo_schema.py` defines each resource as a strict Pydantic model, for the detail and the list shapes; unknown fields fail validation. `--schemas DIR` exports them as JSON Schema.
 
 Shapes follow the [backoffice documentation](https://developers.omerlo.com/docs/backoffice). Two links are assumptions until checked on staging ([#23](https://github.com/antholim/Pulse/issues/23)): a session speaker's `actor_id` is a person id, and a project's `owner_id` is an organization id.
+
+## Mock Omerlo server
+
+`mock_omerlo.py` serves the fixtures like the Reader API, so the connector can run against it without staging: an OAuth 2 client credentials token endpoint, `Authorization: Bearer` and `x-omerlo-media-id` checks, data scoped to the media id, and cursor pagination (`before`, `after`, `limit`, `meta.next`) ordered by `updated_at`. The ground truth is never served.
+
+```bash
+docker compose --profile mock up mock-omerlo          # or: --profile full for the whole stack
+# without Docker:
+cd backend && uv run python -m synthetic.mock_omerlo  # --fixtures synthetic/out to serve files
+```
+
+Point the connector at it with:
+
+```
+OMERLO_BASE_URL=http://localhost:8100
+OMERLO_TOKEN_URL=http://localhost:8100/oauth/token
+OMERLO_CLIENT_ID=mock-client
+OMERLO_CLIENT_SECRET=mock-secret
+OMERLO_MEDIA_ID=demo-capitale        # or demo-estrie
+```
+
+Interactive API docs are at http://localhost:8100/docs. In tests, the `mock_omerlo` fixture in `tests/synthetic/conftest.py` gives a `TestClient` over small fixtures.
+
+| Path | Returns |
+|------|---------|
+| `POST /oauth/token` | Bearer token (`grant_type=client_credentials`) |
+| `GET /api/media/v1/categories`, `/profile_types` | Paginated list |
+| `GET /api/media/v1/community/{organizations,people,projects,events}` | Paginated list |
+| `GET /api/media/v1/contents` | Paginated summaries (no blocks), categories in `assocs` |
+| `GET <any list path>/{id}` | One record; contents include their blocks |
+| `GET /api/media/v1/community/events/{id}/participants/people` | Paginated people |

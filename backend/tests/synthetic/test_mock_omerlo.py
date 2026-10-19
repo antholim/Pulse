@@ -1,7 +1,8 @@
 import pytest
 
-from synthetic.mock_omerlo import LIST_PATHS, MAX_LIMIT, TOKEN_PATH, encode_cursor
-from tests.synthetic.conftest import SETTINGS
+from synthetic.mock_omerlo import LIST_PATHS, MAX_LIMIT, TOKEN_PATH, build_app, encode_cursor
+from synthetic.omerlo_fixtures import OmerloFixtureGenerator, write_fixtures
+from tests.synthetic.conftest import SETTINGS, SMALL
 
 ORGS = LIST_PATHS["organizations"]
 
@@ -232,3 +233,20 @@ def test_unknown_event_participants_get_404(mock_omerlo, headers):
 def test_ground_truth_is_not_served(mock_omerlo, headers):
     for path in ("/api/media/v1/ground_truth", "/ground_truth.dev_only.json"):
         assert mock_omerlo.get(path, headers=headers).status_code == 404
+
+
+# --------------------------------------------------------------------- CLI
+
+
+def test_cli_serves_fixture_files(tmp_path):
+    write_fixtures(OmerloFixtureGenerator(5, SMALL).generate(), tmp_path, 5)
+
+    app, args = build_app(["--fixtures", str(tmp_path), "--port", "9000", "--client-id", "me"])
+
+    assert args.port == 9000
+    assert any(getattr(route, "path", None) == ORGS for route in app.routes)
+
+
+def test_cli_rejects_both_seed_and_fixtures(tmp_path):
+    with pytest.raises(SystemExit):
+        build_app(["--seed", "1", "--fixtures", str(tmp_path)])

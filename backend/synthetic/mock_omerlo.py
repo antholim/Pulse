@@ -6,8 +6,12 @@ client credentials token endpoint, `Authorization: Bearer` and
 pagination (`before`, `after`, `limit`) ordered by `updated_at`, and
 `{"data", "assocs", "meta"}` responses. Paths mirror the ones the connector
 assumes until staging confirms them (#23).
+
+    uv run python -m synthetic.mock_omerlo                       # seed 490, port 8100
+    uv run python -m synthetic.mock_omerlo --fixtures synthetic/out
 """
 
+import argparse
 import base64
 import binascii
 import json
@@ -16,12 +20,14 @@ import time
 from bisect import bisect_left, bisect_right
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from synthetic.omerlo_fixtures import TenantData
+from synthetic.fixture_loader import generate_fixtures, load_fixtures
+from synthetic.omerlo_fixtures import DEFAULT_SEED, TenantData
 
 TOKEN_PATH = "/oauth/token"
 API = "/api/media/v1"
@@ -191,3 +197,30 @@ def create_app(
         return {"data": window, "assocs": {}, "meta": meta}
 
     return app
+
+
+def build_app(argv: list[str] | None = None) -> tuple[FastAPI, argparse.Namespace]:
+    parser = argparse.ArgumentParser(description="Mock Omerlo Reader API (synthetic data)")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--seed", type=int, default=DEFAULT_SEED, help="generate in memory")
+    source.add_argument("--fixtures", type=Path, help="serve files written by the generator")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8100)
+    parser.add_argument("--client-id", default=MockSettings.client_id)
+    parser.add_argument("--client-secret", default=MockSettings.client_secret)
+    args = parser.parse_args(argv)
+
+    tenants = load_fixtures(args.fixtures) if args.fixtures else generate_fixtures(args.seed)
+    settings = MockSettings(client_id=args.client_id, client_secret=args.client_secret)
+    return create_app(tenants, settings), args
+
+
+def main(argv: list[str] | None = None) -> None:
+    import uvicorn
+
+    app, args = build_app(argv)
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()
