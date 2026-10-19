@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.ruff_cache/
 
 # Node.js
 node_modules/
@@ -19,7 +20,8 @@ coverage/
 .DS_Store
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 
 # Logs
