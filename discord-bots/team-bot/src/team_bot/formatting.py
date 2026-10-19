@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
 
@@ -195,33 +195,34 @@ def pr_summary(prs: Sequence[PullRequest], now: datetime) -> tuple[str, str]:
 
 
 def match_reason(match: TeamMatch) -> str:
-    """Why a team was picked: `label X`, `backend/app/x.py and 2 more files`."""
-    parts = []
-    if match.labels:
-        word = "label" if len(match.labels) == 1 else "labels"
-        parts.append(f"{word} " + ", ".join(f"`{label}`" for label in match.labels))
-    if match.files:
-        text = f"`{match.files[0]}`"
-        if len(match.files) > 1:
-            more = len(match.files) - 1
-            text += f" and {more} more file" + ("s" if more > 1 else "")
-        parts.append(text)
-    return " · ".join(parts)
+    """Why a team was picked: "label `team: swe`", "labels `swe`, `Dashboard`"."""
+    word = "label" if len(match.labels) == 1 else "labels"
+    return f"{word} " + ", ".join(f"`{label}`" for label in match.labels)
 
 
-def review_request(pr: PullRequest, matches: Sequence[TeamMatch]) -> tuple[str, str, str]:
+def review_request(
+    pr: PullRequest,
+    matches: Sequence[TeamMatch],
+    role_ids: Mapping[str, int],
+    reopened: bool = False,
+) -> tuple[str, str, str]:
     """Return (content, embed title, embed description) for the Discord review ping.
 
-    Teams with a Discord role are mentioned; the others are named in bold.
+    `role_ids` maps team keys to their Discord role. Those roles are mentioned; teams
+    without one are named in bold.
     """
     teams = [
-        f"<@&{m.team.discord_role_id}>" if m.team.discord_role_id else f"**{m.team.name}**"
+        f"<@&{role_ids[m.team.key]}>" if m.team.key in role_ids else f"**{m.team.name}**"
         for m in matches
     ]
-    content = " ".join(teams) + " review requested"
+    content = " ".join(teams) + " review requested" + (" (PR reopened)" if reopened else "")
     title = truncate(f"#{pr.number}: {pr.title}", DISCORD_TITLE_LIMIT)
     lines = [f"by {pr.author}", ""]
-    lines += [f"**{m.team.name}**: {match_reason(m)}" for m in matches]
+    if any(m.labels for m in matches):
+        lines += [f"**{m.team.name}**: {match_reason(m)}" for m in matches]
+    else:
+        lines.append("No team label on this PR, so every team is asked. Add a team label to")
+        lines.append("ping only that team next time.")
     return content, title, truncate("\n".join(lines))
 
 

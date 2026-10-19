@@ -251,6 +251,17 @@ class Storage:
                 [(pr_number, key, _utc_iso(now)) for key in team_keys],
             )
 
+    def last_routed_at(self, pr_number: int) -> datetime | None:
+        row = self._conn.execute(
+            "SELECT MAX(routed_at) AS at FROM review_routing WHERE pr_number = ?", (pr_number,)
+        ).fetchone()
+        return _parse_utc(row["at"]) if row["at"] else None
+
+    def forget_routed_teams(self, pr_number: int) -> None:
+        """Start over for a reopened PR, so every team is pinged again."""
+        with self._conn:
+            self._conn.execute("DELETE FROM review_routing WHERE pr_number = ?", (pr_number,))
+
     def review_checked_at(self, pr_number: int) -> datetime | None:
         row = self._conn.execute(
             "SELECT updated_at FROM review_checked WHERE pr_number = ?", (pr_number,)
@@ -267,13 +278,14 @@ class Storage:
                 (pr_number, _utc_iso(updated_at)),
             )
 
-    def review_routing_since(self, now: datetime) -> datetime:
-        """When review routing first ran. PRs opened before then are left alone, so turning
-        it on does not ping every team for every PR already open."""
+    def review_routing_since(self, start: datetime) -> datetime:
+        """The cutoff recorded the first time review routing ran (`start` on that first call).
+        PRs opened before it are left alone, so turning routing on does not ping every team
+        for every PR already open."""
         with self._conn:
             self._conn.execute(
                 "INSERT OR IGNORE INTO bot_state (key, value) VALUES (?, ?)",
-                (ROUTING_SINCE_KEY, _utc_iso(now)),
+                (ROUTING_SINCE_KEY, _utc_iso(start)),
             )
         row = self._conn.execute(
             "SELECT value FROM bot_state WHERE key = ?", (ROUTING_SINCE_KEY,)

@@ -1,14 +1,15 @@
-"""PR review routing (#76): the polling job, /run review-routing and the CODEOWNERS command."""
+"""PR review routing (#76): the polling job and /run review-routing."""
 
 from dataclasses import replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from githubkit.exception import RequestFailed
 
-from team_bot import codeowners, formatting
+from team_bot import formatting
 from team_bot.cogs.review_routing import ReviewRoutingCog
 from team_bot.cogs.run import RunCog
 from team_bot.config import Settings
@@ -29,23 +30,20 @@ ENV = {
 }
 TEAMS_TOML = """
 [teams.data]
-name = "Data team"
-discord_role_id = 111
+name = "Data & AI team"
+discord_role = "data team"
 members = ["alice", "bob"]
 labels = ["data"]
-paths = ["backend/app/processing/"]
 
 [teams.swe]
 name = "SWE team"
-discord_role_id = 222
+discord_role = 222
 members = ["carol"]
 labels = ["swe", "Dashboard"]
-paths = ["frontend/"]
 
 [teams.infra]
 name = "Infra team"
 labels = ["infra"]
-paths = [".github/"]
 """
 OPENED = utc("2026-10-19T12:00:00")
 
@@ -60,6 +58,10 @@ class FakeBot:
 
     async def send_to(self, channel_id, **kwargs):
         self.sent.append((channel_id, kwargs))
+
+    def get_guild(self, guild_id):
+        assert guild_id == 1
+        return SimpleNamespace(roles=[SimpleNamespace(id=111, name="Data Team")])
 
     def get_cog(self, name):
         return self.cogs.get(name)
@@ -90,8 +92,7 @@ def teams_path(tmp_path):
 @pytest.fixture
 def github():
     return FakeGitHub(
-        pulls=[make_pr()],
-        files={12: ["frontend/src/App.tsx"]},
+        pulls=[make_pr(labels=("Dashboard",))],
         issue_labels={12: ["data", "Release 1"]},
     )
 
@@ -109,7 +110,7 @@ def cog(bot):
 
 
 async def test_pings_matched_teams_once(bot, github, cog):
-    assert await cog.run_check() == ["#12 Add fuzzy matching: Data team, SWE team"]
+    assert await cog.run_check() == ["#12 Add fuzzy matching: Data & AI team, SWE team"]
 
     channel, message = bot.sent[0]
     assert channel == ROUTING_CHANNEL
@@ -121,7 +122,7 @@ async def test_pings_matched_teams_once(bot, github, cog):
     assert github.requested == [(12, ["bob", "carol"])]  # alice wrote the PR
     assert bot.storage.routed_teams(12) == {"data", "swe"}
 
-    # Next check: the PR has not changed, so GitHub is not asked for its files again.
+    # Next check: the PR has not changed, so GitHub is not asked about it again.
     assert await cog.run_check() == []
     assert github.fetched == [12]
     assert len(bot.sent) == 1
@@ -137,15 +138,14 @@ async def test_changed_pr_pings_only_new_teams(bot, github, cog):
     assert github.fetched == [12, 12]
 
 
-async def test_skips_drafts_old_prs_and_unmatched_prs(bot, github, cog):
+async def test_skips_drafts_and_old_prs(bot, github, cog):
     github._pulls = [
         make_pr(1, draft=True, labels=("data",)),
         make_pr(2, created_at=OPENED - timedelta(days=2), labels=("data",)),
-        make_pr(3),  # no files, labels or issue labels
         make_pr(4, labels=("data",), updated_at=None),
     ]
-    assert await cog.run_check() == ["#4 Add fuzzy matching: Data team"]
-    assert github.fetched == [3, 4]
+    assert await cog.run_check() == ["#4 Add fuzzy matching: Data & AI team"]
+    assert github.fetched == [2, 4]  # the old PR is looked at once, in case it was reopened
     # Without updated_at the PR is checked every time, but each team is still pinged once.
     assert await cog.run_check() == []
     assert len(bot.sent) == 1
@@ -183,13 +183,18 @@ async def test_first_check_ignores_prs_already_open(storage, github, teams_path)
     assert bot.sent == []
 
 
+async def test_first_check_routes_a_pr_opened_just_before(storage, github, teams_path):
+    just_now = datetime.now(UTC) - timedelta(minutes=30)
+    github._pulls = [make_pr(created_at=just_now, updated_at=just_now)]
+    bot = FakeBot(storage, github, teams_path)  # routing never ran before
+    assert len(await ReviewRoutingCog(bot).run_check()) == 1
+
+
 async def test_route_now_pings_again(bot, github, cog):
     await cog.run_check()
-    assert await cog.route_now(12) == ["#12 Add fuzzy matching: Data team, SWE team"]
+    assert await cog.route_now(12) == ["#12 Add fuzzy matching: Data & AI team, SWE team"]
     assert len(bot.sent) == 2
     assert await cog.route_now(99) == []  # not an open PR
-    github.files, github.issue_labels = {}, {}
-    assert await cog.route_now(12) == []  # matches no team
 
 
 async def test_cog_load_starts_the_loop_only_when_configured(bot, teams_path, caplog):
@@ -249,7 +254,7 @@ async def test_run_review_routing(bot, cog):
     interaction = FakeInteraction()
     await run_cog.review_routing.callback(run_cog, interaction, None)
     assert interaction.replies[0] == (
-        "Ran review routing: posted 1.\n- #12 Add fuzzy matching: Data team, SWE team"
+        "Ran review routing: posted 1.\n- #12 Add fuzzy matching: Data & AI team, SWE team"
     )
     await run_cog.review_routing.callback(run_cog, interaction, None)
     assert interaction.replies[1] == "Ran review routing: nothing was due."
@@ -258,8 +263,8 @@ async def test_run_review_routing(bot, cog):
 
 
 def test_text_helpers():
-    data = ReviewTeam("data", "Data team", (), ("data",), ())
-    matches = match_teams([data], ["data"], [])
+    data = ReviewTeam("data", "Data team", (), ("data",))
+    matches = match_teams([data], ["data"])
     assert formatting.routing_result(make_pr(), matches) == "#12 Add fuzzy matching: Data team"
     assert "Review pings" in formatting.automatic_posts(None, review_routing=True)
     assert "PR review pings: turned off" in formatting.automatic_posts(None)
@@ -280,6 +285,14 @@ def test_routing_settings():
         Settings.from_env(ENV | {"REVIEW_ROUTING_SECONDS": "5"})
 
 
+def test_relative_paths_follow_the_env_file_folder(tmp_path):
+    settings = Settings.from_env(ENV, base_dir=tmp_path)
+    assert settings.review_teams_path == tmp_path / "review-teams.toml"
+    assert settings.db_path == tmp_path / "data" / "team-bot.db"
+    absolute = Settings.from_env(ENV | {"DB_PATH": str(tmp_path / "x.db")}, base_dir=Path("y"))
+    assert absolute.db_path == tmp_path / "x.db"
+
+
 def test_storage_routing_state(storage):
     first = utc("2026-10-19T00:00:00")
     assert storage.review_routing_since(first) == first
@@ -293,20 +306,77 @@ def test_storage_routing_state(storage):
     assert storage.review_checked_at(1) == first + timedelta(hours=1)
 
 
-def test_codeowners_command(tmp_path, teams_path, capsys):
-    output = tmp_path / "CODEOWNERS"
-    args = ["--config", str(teams_path), "--output", str(output)]
-    assert codeowners.main([*args, "--check"]) == 1  # missing
-    assert codeowners.main(args) == 0
-    assert "/frontend/ @carol\n" in output.read_text()
-    assert codeowners.main([*args, "--check"]) == 0
-    assert codeowners.main(["--config", str(tmp_path / "nope.toml")]) == 1
-    assert "Cannot read" in capsys.readouterr().err
+async def test_role_not_found_names_the_team(bot, github, cog, caplog):
+    cog._teams = tuple(
+        replace(team, discord_role="Data People") if team.key == "data" else team
+        for team in cog.teams()
+    )
+    await cog.run_check()
+    assert bot.sent[0][1]["content"] == "**Data & AI team** <@&222> review requested"
+    assert [role.id for role in bot.sent[0][1]["allowed_mentions"].roles] == [222]
+    assert "No Discord role named 'Data People' for Data & AI team" in caplog.text
 
 
-def test_match_reason_counts_files():
-    swe = ReviewTeam("swe", "SWE team", (), (), ("frontend/",))
-    one_more = match_teams([swe], [], ["frontend/a.ts", "frontend/b.ts"])[0]
-    assert formatting.match_reason(one_more) == "`frontend/a.ts` and 1 more file"
-    two_more = match_teams([swe], [], [f"frontend/{n}.ts" for n in "abc"])[0]
-    assert formatting.match_reason(two_more) == "`frontend/a.ts` and 2 more files"
+async def test_role_lookup_without_the_server(bot, cog):
+    bot.get_guild = lambda guild_id: None  # not connected yet
+    assert cog.role_id(cog.teams()[0]) is None
+
+
+async def test_reopened_pr_pings_every_team_again(bot, github, cog):
+    await cog.run_check()
+    assert len(bot.sent) == 1
+    bot.storage.forget_routed_teams(12)  # pretend that first ping was at OPENED
+    bot.storage.mark_teams_routed(12, ["data", "swe"], OPENED)
+    # Closed, then reopened an hour later: GitHub bumps updated_at.
+    reopened = OPENED + timedelta(hours=1)
+    github._pulls = [make_pr(labels=("Dashboard",), updated_at=reopened)]
+    github.reopened_at = {12: reopened}
+
+    assert await cog.run_check() == ["#12 Add fuzzy matching: Data & AI team, SWE team"]
+    assert bot.sent[1][1]["content"] == "<@&111> <@&222> review requested (PR reopened)"
+    assert github.requested[-1] == (12, ["bob", "carol"])
+
+    # Any later change: the reopen was already handled.
+    github._pulls = [make_pr(labels=("Dashboard",), updated_at=reopened + timedelta(minutes=5))]
+    assert await cog.run_check() == []
+    assert len(bot.sent) == 2
+
+
+async def test_old_pr_reopened_after_routing_started_is_pinged(bot, github, cog):
+    old = OPENED - timedelta(days=30)
+    github._pulls = [make_pr(created_at=old, updated_at=old)]
+    assert await cog.run_check() == []  # too old, never pinged
+    github._pulls = [make_pr(created_at=OPENED - timedelta(days=30), updated_at=OPENED)]
+    github.reopened_at = {12: OPENED}
+    assert len(await cog.run_check()) == 1
+    assert "(PR reopened)" in bot.sent[0][1]["content"]
+
+
+async def test_reopen_before_routing_started_does_not_count(bot, github, cog):
+    github.reopened_at = {12: OPENED - timedelta(days=5)}  # routing started a day before OPENED
+    await cog.run_check()
+    assert "reopened" not in bot.sent[0][1]["content"]
+
+
+def test_storage_last_routed_and_forget(storage):
+    first = utc("2026-10-19T00:00:00")
+    assert storage.last_routed_at(1) is None
+    storage.mark_teams_routed(1, ["data"], first)
+    storage.mark_teams_routed(1, ["swe"], first + timedelta(hours=1))
+    assert storage.last_routed_at(1) == first + timedelta(hours=1)
+    storage.forget_routed_teams(1)
+    assert storage.routed_teams(1) == set()
+
+
+async def test_pr_without_team_label_pings_every_team(bot, github, cog):
+    github._pulls = [make_pr(labels=("Release 1",))]
+    github.issue_labels = {}
+    assert await cog.run_check() == ["#12 Add fuzzy matching: Data & AI team, SWE team, Infra team"]
+    message = bot.sent[0][1]
+    assert message["content"] == "<@&111> <@&222> **Infra team** review requested"
+    assert "No team label on this PR, so every team is asked" in message["embed"].description
+    assert github.requested == [(12, ["bob", "carol"])]
+
+    # Labelling it afterwards does not ping again: every team was already asked.
+    github._pulls = [make_pr(labels=("data",), updated_at=OPENED + timedelta(hours=1))]
+    assert await cog.run_check() == []

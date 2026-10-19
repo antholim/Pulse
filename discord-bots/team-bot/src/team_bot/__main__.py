@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
 import discord
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from team_bot.bot import TeamBot
 from team_bot.config import ConfigError, Settings
@@ -15,10 +16,12 @@ from team_bot.services.storage import Storage
 
 
 def main() -> None:
-    load_dotenv()
+    # Looks for .env from this package's folder upwards, not from the current folder.
+    env_file = find_dotenv()
+    load_dotenv(env_file)
     discord.utils.setup_logging(level=logging.INFO)
     try:
-        settings = Settings.from_env()
+        settings = Settings.from_env(base_dir=Path(env_file).parent if env_file else None)
     except ConfigError as exc:
         logging.getLogger("team_bot").error("%s. See .env.example.", exc)
         sys.exit(1)

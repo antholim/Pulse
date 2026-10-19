@@ -9,7 +9,7 @@ Teams are set in review-teams.toml (see domain/review_teams.py). The scheduled l
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import discord
@@ -25,12 +25,16 @@ from team_bot.domain.review_teams import (
     match_teams,
     reviewers_for,
 )
-from team_bot.services.github import PullRequest
+from team_bot.services.github import PullRequest, ReviewContext
 
 if TYPE_CHECKING:
     from team_bot.bot import TeamBot
 
 log = logging.getLogger(__name__)
+
+# The first time routing runs, PRs opened up to this long before are still routed (a PR
+# opened just before starting the bot); older ones are left alone.
+FIRST_RUN_GRACE = timedelta(hours=1)
 
 
 class ReviewRoutingCog(commands.Cog):
@@ -59,15 +63,42 @@ class ReviewRoutingCog(commands.Cog):
             self._teams = load_review_teams(self.bot.settings.review_teams_path)
         return self._teams
 
-    async def find_teams(self, pr: PullRequest) -> list[TeamMatch]:
-        github = self.bot.github
-        labels = [*pr.labels, *await github.closing_issue_labels(pr.number)]
-        return match_teams(self.teams(), labels, await github.changed_files(pr.number))
+    def role_id(self, team: ReviewTeam) -> int | None:
+        """The team's Discord role: its ID, or found by name (any case) in the server."""
+        role = team.discord_role
+        if role is None or isinstance(role, int):
+            return role
+        guild = self.bot.get_guild(self.bot.settings.guild_id)
+        roles = guild.roles if guild else []
+        found = next((r for r in roles if r.name.casefold() == role.casefold()), None)
+        if found is None:
+            log.warning("No Discord role named %r for %s, naming the team instead", role, team.name)
+            return None
+        return found.id
 
-    async def route(self, pr: PullRequest, *, again: bool = False) -> list[TeamMatch]:
+    def find_teams(self, pr: PullRequest, context: ReviewContext) -> list[TeamMatch]:
+        return match_teams(self.teams(), [*pr.labels, *context.issue_labels])
+
+    def reopened(self, pr: PullRequest, context: ReviewContext, since: datetime) -> bool:
+        """Reopened since its teams were last pinged (or ever, for a PR never pinged)."""
+        if context.reopened_at is None or context.reopened_at < since:
+            return False
+        last = self.bot.storage.last_routed_at(pr.number)
+        return last is None or context.reopened_at > last
+
+    async def route(
+        self,
+        pr: PullRequest,
+        context: ReviewContext | None = None,
+        *,
+        again: bool = False,
+        reopened: bool = False,
+    ) -> list[TeamMatch]:
         """Ping the teams this PR concerns that were not pinged for it yet (all of them with
         `again`), and request reviews from their members. Returns the teams pinged."""
-        matches = await self.find_teams(pr)
+        if context is None:
+            context = await self.bot.github.review_context(pr.number)
+        matches = self.find_teams(pr, context)
         if not again:
             done = self.bot.storage.routed_teams(pr.number)
             matches = [m for m in matches if m.team.key not in done]
@@ -82,8 +113,11 @@ class ReviewRoutingCog(commands.Cog):
                 # A read-only token, or a username that is not a collaborator. Still ping.
                 log.warning("Could not request reviews from %s: %s", ", ".join(reviewers), exc)
 
-        content, title, description = formatting.review_request(pr, matches)
-        roles = [discord.Object(m.team.discord_role_id) for m in matches if m.team.discord_role_id]
+        role_ids = {m.team.key: role for m in matches if (role := self.role_id(m.team))}
+        content, title, description = formatting.review_request(
+            pr, matches, role_ids, reopened=reopened
+        )
+        roles = [discord.Object(role) for role in role_ids.values()]
         await self.bot.send_to(
             self.bot.settings.review_routing_channel_id,
             content=content,
@@ -103,19 +137,27 @@ class ReviewRoutingCog(commands.Cog):
 
     async def run_check(self) -> list[str]:
         """Ping the teams of every open PR that is ready for review and changed since the last
-        check. PRs opened before review routing was first turned on are left alone.
+        check. A reopened PR pings all its teams again. PRs opened well before review
+        routing first ran are left alone, unless they are reopened after it.
 
         Returns what was posted. A PR that fails is skipped and retried next time.
         """
-        since = self.bot.storage.review_routing_since(datetime.now(UTC))
+        storage = self.bot.storage
+        since = storage.review_routing_since(datetime.now(UTC) - FIRST_RUN_GRACE)
         posted = []
         for pr in await self.bot.github.open_pull_requests():
-            if pr.draft or pr.created_at < since:
+            if pr.draft:
                 continue
-            if pr.updated_at and self.bot.storage.review_checked_at(pr.number) == pr.updated_at:
+            if pr.updated_at and storage.review_checked_at(pr.number) == pr.updated_at:
                 continue
             try:
-                matches = await self.route(pr)
+                context = await self.bot.github.review_context(pr.number)
+                reopened = self.reopened(pr, context, since)
+                if reopened:
+                    storage.forget_routed_teams(pr.number)
+                matches = []
+                if reopened or pr.created_at >= since:
+                    matches = await self.route(pr, context, reopened=reopened)
             except Exception:
                 log.exception("Could not route PR #%d", pr.number)
                 continue

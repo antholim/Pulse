@@ -17,7 +17,6 @@ from team_bot.config import GitHubAuth
 from team_bot.domain.iterations import Milestone
 
 MILESTONE_CACHE_SECONDS = 600
-PAGE_SIZE = 100
 
 
 @dataclass(frozen=True)
@@ -33,6 +32,14 @@ class PullRequest:
     updated_at: datetime | None = None
 
 
+@dataclass(frozen=True)
+class ReviewContext:
+    """What review routing needs beyond the PR itself."""
+
+    issue_labels: tuple[str, ...]  # labels of the issues the PR closes ("Closes #12")
+    reopened_at: datetime | None  # when the PR was last reopened, if ever
+
+
 class GitHubReader(Protocol):
     """What the cogs need from GitHub. Tests pass a fake that implements this."""
 
@@ -42,19 +49,20 @@ class GitHubReader(Protocol):
 
     # Review routing (#76)
 
-    async def changed_files(self, number: int) -> list[str]: ...
-
-    async def closing_issue_labels(self, number: int) -> list[str]: ...
+    async def review_context(self, number: int) -> ReviewContext: ...
 
     async def request_reviewers(self, number: int, logins: list[str]) -> None: ...
 
 
-CLOSING_ISSUE_LABELS_QUERY = """
+REVIEW_CONTEXT_QUERY = """
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       closingIssuesReferences(first: 20) {
         nodes { labels(first: 50) { nodes { name } } }
+      }
+      timelineItems(last: 1, itemTypes: [REOPENED_EVENT]) {
+        nodes { ... on ReopenedEvent { createdAt } }
       }
     }
   }
@@ -129,30 +137,21 @@ class GitHubService:
         )
         return [pull_request_from_json(item) for item in response.json()]
 
-    async def changed_files(self, number: int) -> list[str]:
-        files: list[str] = []
-        page = 1
-        while True:
-            response = await self._client.rest.pulls.async_list_files(
-                self._owner, self._repo, number, per_page=PAGE_SIZE, page=page
-            )
-            batch = response.json()
-            files += [item["filename"] for item in batch]
-            # A renamed file belongs to the folder it left as well as the one it moved to.
-            files += [item["previous_filename"] for item in batch if item.get("previous_filename")]
-            if len(batch) < PAGE_SIZE:
-                return files
-            page += 1
-
-    async def closing_issue_labels(self, number: int) -> list[str]:
-        """Labels of the issues this PR closes ("Closes #12" in the description)."""
+    async def review_context(self, number: int) -> ReviewContext:
+        """Labels of the issues this PR closes, and when it was last reopened (one query)."""
         data = await self._client.async_graphql(
-            CLOSING_ISSUE_LABELS_QUERY,
+            REVIEW_CONTEXT_QUERY,
             {"owner": self._owner, "repo": self._repo, "number": number},
         )
         pull = (data.get("repository") or {}).get("pullRequest") or {}
         issues = (pull.get("closingIssuesReferences") or {}).get("nodes") or []
-        return [label["name"] for issue in issues for label in issue["labels"]["nodes"]]
+        reopens = (pull.get("timelineItems") or {}).get("nodes") or []
+        return ReviewContext(
+            issue_labels=tuple(
+                label["name"] for issue in issues for label in issue["labels"]["nodes"]
+            ),
+            reopened_at=_parse_datetime(reopens[-1].get("createdAt")) if reopens else None,
+        )
 
     async def request_reviewers(self, number: int, logins: list[str]) -> None:
         """Needs a token with Pull requests: write."""

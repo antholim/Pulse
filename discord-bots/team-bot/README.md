@@ -132,54 +132,50 @@ single file, copying it is enough).
 ## PR review routing
 
 When a PR is ready for review, the bot pings the Discord role of each team it concerns
-(data, SWE, infra) and asks the team's members for a review on GitHub. Each team is pinged
-once per PR. If the PR later gets a new label or touches another team's folders, only that
-new team is pinged.
+(data and AI, SWE, infra and security) and asks the team's members for a review on GitHub.
 
-A team is picked when one of its labels is on the PR or on an issue the PR closes
-(`Closes #12`), or when the PR changes a file under one of its paths. A PR that matches no
-team is left alone, and draft PRs wait until they are marked ready for review.
+Teams are picked **by label only**, never by the files the PR changes:
+
+- A team is picked when any of its labels is on the PR or on an issue the PR closes
+  (`Closes #12`), for example `team: data-ai` or `data` for the data and AI team.
+- A PR with no team label pings **every** team. Add the label when opening the PR to ping
+  only that team.
+- Each team is pinged once per PR. A label added later pings only the team it adds.
+- A closed PR that is reopened pings its teams again (the message says "PR reopened").
+- Draft PRs wait until they are marked ready for review.
 
 The bot has no public URL, so GitHub cannot tell it when a PR is opened. It checks the open
 PRs every `REVIEW_ROUTING_SECONDS` (60 by default) and only looks closer at PRs that changed,
 so a ping arrives within about a minute while the bot is running. PRs opened while it was
-off are picked up when it starts again. PRs that were already open the first time routing
-ran are left alone, so turning it on does not ping every team at once.
+off are picked up when it starts again. The first time routing runs, PRs opened more than an
+hour before are left alone, so turning it on does not ping every team at once.
 
 ### Teams
 
-Teams, their members, Discord roles, labels and paths are set in
-[review-teams.toml](review-teams.toml). Restart the bot after editing it. The same file
-generates [.github/CODEOWNERS](../../.github/CODEOWNERS), so GitHub also asks those people
-for a review and branch protection can require one of them to approve:
-
-```bash
-python -m team_bot.codeowners
-```
-
-The tests fail if `CODEOWNERS` is out of date.
+Teams, their labels, members and Discord roles are set in
+[review-teams.toml](review-teams.toml). Restart the bot after editing it. Relative paths in
+`.env` (`DB_PATH`, `REVIEW_TEAMS_PATH`) are taken from the folder of the `.env` file, so the
+bot can be started from any folder.
 
 ### Setup
 
-1. Fill in `members` (GitHub usernames) for each team in `review-teams.toml`. A team needs
-   at least two members, or its only member cannot get their own PRs approved.
-2. In Discord, create the `@data team`, `@swe team` and `@infra team` roles. With Developer
-   Mode on, open **Server Settings > Roles**, right-click each role, **Copy Role ID**, and set
-   it as that team's `discord_role_id`. Either tick **Allow anyone to @mention this role** on
-   each role, or give the bot the **Mention @everyone, @here and All Roles** permission,
-   otherwise the role name shows but nobody is notified.
-3. Pings go to `REVIEW_ROUTING_CHANNEL_ID`, or the PR summary channel if it is not set.
-4. To also request reviews on GitHub, the bot's token needs **Pull requests: Read and
-   write**. With a read-only token the bot still pings Discord and logs a warning.
-5. Optional, to make one team approval mandatory: on GitHub, **Settings > Branches**, add a
-   rule for `main` with **Require a pull request before merging** and **Require review from
-   Code Owners**.
+1. Set each team's `discord_role` to the name of its Discord role (`data team`, `swe team`,
+   `infra team` by default). The bot finds the role by name in the server, any case. A role
+   ID also works (Developer Mode on, **Server Settings > Roles**, right-click, **Copy Role
+   ID**). If no role is found, the message names the team in bold and the bot logs a
+   warning. Either tick **Allow anyone to @mention this role** on each role, or give the bot
+   the **Mention @everyone, @here and All Roles** permission, otherwise the role name shows
+   but nobody is notified.
+2. Pings go to `REVIEW_ROUTING_CHANNEL_ID`, or the PR summary channel if it is not set.
+3. Optional: fill in `members` (GitHub usernames) to also request reviews on GitHub. The
+   bot's token then needs **Pull requests: Read and write**; with a read-only token the bot
+   still pings Discord and logs a warning.
 
 ### Trying it
 
-Start the bot, then open a PR (not a draft) with the `data`, `swe` or `infra` label, or
-one that changes a file under a team's paths. Within a minute the team is pinged. To ping
-the teams of a PR that was already open, use `/run review-routing pr: <number>`.
+Start the bot, then open a PR (not a draft) with the `team: data-ai`, `team: swe` or
+`team: infra-security` label. Within a minute that team is pinged. To ping the teams of a PR
+that was already open, use `/run review-routing pr: <number>`.
 
 ## GitHub notifications
 
@@ -231,7 +227,6 @@ Layout:
 ```
 src/team_bot/
   __main__.py        entry point (python -m team_bot)
-  codeowners.py      writes .github/CODEOWNERS from review-teams.toml
   config.py          environment variables
   bot.py             Discord client, loads the cogs, syncs slash commands
   formatting.py      message and markdown text (pure functions)

@@ -1,23 +1,20 @@
 """Which team reviews a pull request (issue #76).
 
 Teams live in `review-teams.toml`: GitHub usernames, an optional Discord role, and the
-labels and paths each team owns. A PR goes to every team whose labels are on it (or on an
-issue it closes) or whose paths it changes. The same file generates `.github/CODEOWNERS`,
-so GitHub also asks those people for a review.
+labels each team owns. A PR goes to every team whose labels are on it (or on an issue it
+closes). A PR without any team's label goes to every team.
 """
 
 from __future__ import annotations
 
-import re
 import tomllib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from functools import cache
 from pathlib import Path
 
 from team_bot.config import ConfigError
 
-TEAM_KEYS = {"name", "discord_role_id", "members", "labels", "paths"}
+TEAM_KEYS = {"name", "discord_role", "members", "labels"}
 
 
 @dataclass(frozen=True)
@@ -26,15 +23,13 @@ class ReviewTeam:
     name: str
     members: tuple[str, ...]
     labels: tuple[str, ...]
-    paths: tuple[str, ...]
-    discord_role_id: int | None = None
+    discord_role: str | int | None = None  # role name, or role ID
 
 
 @dataclass(frozen=True)
 class TeamMatch:
     team: ReviewTeam
-    labels: tuple[str, ...]  # the team's labels found on the PR or its issues
-    files: tuple[str, ...]  # the changed files under the team's paths
+    labels: tuple[str, ...]  # the team's labels found on the PR or its issues; () if none
 
 
 def load_review_teams(path: Path) -> tuple[ReviewTeam, ...]:
@@ -69,9 +64,13 @@ def _parse_team(key: str, raw: object) -> ReviewTeam:
     if not isinstance(name, str) or not name.strip():
         raise ConfigError(f"{where} needs a name")
 
-    role_id = raw.get("discord_role_id")
-    if role_id is not None and (not isinstance(role_id, int) or role_id <= 0):
-        raise ConfigError(f"{where} discord_role_id must be a positive number")
+    role = raw.get("discord_role")
+    if isinstance(role, str):
+        role = role.strip().removeprefix("@").strip()
+    if role is not None and not (
+        (isinstance(role, str) and role) or (type(role) is int and role > 0)
+    ):
+        raise ConfigError(f"{where} discord_role must be a role name or a role ID")
 
     def strings(field: str) -> tuple[str, ...]:
         values = raw.get(field, [])
@@ -83,53 +82,23 @@ def _parse_team(key: str, raw: object) -> ReviewTeam:
 
     members = tuple(m.removeprefix("@") for m in strings("members"))
     labels = strings("labels")
-    paths = strings("paths")
-    if not labels and not paths:
-        raise ConfigError(f"{where} needs at least one label or path")
-    for pattern in paths:
-        if pattern.startswith(("/", "!")):
-            raise ConfigError(f"{where} path {pattern!r} must be relative, without / or !")
-
-    return ReviewTeam(key, name.strip(), members, labels, paths, role_id)
+    if not labels:
+        raise ConfigError(f"{where} needs at least one label")
+    return ReviewTeam(key, name.strip(), members, labels, role)
 
 
-@cache
-def _pattern_regex(pattern: str) -> re.Pattern[str]:
-    """`dir/` matches everything under dir, `*` stays within a folder, `**` crosses them."""
-    regex = ""
-    for part in re.split(r"(\*\*/|\*\*|\*|\?)", pattern.rstrip("/")):
-        if part == "**/":
-            regex += "(?:.*/)?"
-        elif part == "**":
-            regex += ".*"
-        elif part == "*":
-            regex += "[^/]*"
-        elif part == "?":
-            regex += "[^/]"
-        else:
-            regex += re.escape(part)
-    if pattern.endswith("/"):
-        regex += "/.*"
-    return re.compile(regex)
+def match_teams(teams: Sequence[ReviewTeam], labels: Iterable[str]) -> list[TeamMatch]:
+    """The teams whose labels are on the PR, in config order (labels compare in any case).
 
-
-def path_matches(pattern: str, path: str) -> bool:
-    return _pattern_regex(pattern).fullmatch(path) is not None
-
-
-def match_teams(
-    teams: Sequence[ReviewTeam], labels: Iterable[str], files: Iterable[str]
-) -> list[TeamMatch]:
-    """Every team the PR concerns, in config order. Labels compare case-insensitively."""
+    When no team's label is there, every team, with no labels.
+    """
     found = {label.casefold() for label in labels}
-    files = list(files)
     matches = []
     for team in teams:
         team_labels = tuple(label for label in team.labels if label.casefold() in found)
-        team_files = tuple(f for f in files if any(path_matches(p, f) for p in team.paths))
-        if team_labels or team_files:
-            matches.append(TeamMatch(team, team_labels, team_files))
-    return matches
+        if team_labels:
+            matches.append(TeamMatch(team, team_labels))
+    return matches or [TeamMatch(team, ()) for team in teams]
 
 
 def reviewers_for(matches: Iterable[TeamMatch], author: str) -> list[str]:
@@ -140,23 +109,3 @@ def reviewers_for(matches: Iterable[TeamMatch], author: str) -> list[str]:
             if member.casefold() != author.casefold():
                 reviewers.setdefault(member.casefold(), member)
     return sorted(reviewers.values(), key=str.casefold)
-
-
-def codeowners_pattern(pattern: str) -> str:
-    # CODEOWNERS patterns without a leading slash match at any depth; ours start at the root.
-    return pattern if pattern.startswith("**/") else "/" + pattern
-
-
-def render_codeowners(teams: Sequence[ReviewTeam]) -> str:
-    lines = [
-        "# Generated from discord-bots/team-bot/review-teams.toml (issue #76).",
-        "# Do not edit by hand: change review-teams.toml, then run from discord-bots/team-bot",
-        "#   python -m team_bot.codeowners",
-        "#",
-        "# When several lines match a file, the last one wins.",
-    ]
-    for team in teams:
-        owners = " ".join(f"@{member}" for member in team.members)
-        lines += ["", f"# {team.name}" + ("" if owners else " (no members listed yet)")]
-        lines += [f"{codeowners_pattern(p)} {owners}".rstrip() for p in team.paths]
-    return "\n".join(lines) + "\n"

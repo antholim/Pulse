@@ -63,9 +63,17 @@ class Settings:
         return self.github_repo.split("/", 1)[1]
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
+    def from_env(
+        cls, env: Mapping[str, str] | None = None, base_dir: Path | None = None
+    ) -> Settings:
+        """Relative DB_PATH and REVIEW_TEAMS_PATH are taken from base_dir (the folder of the
+        .env file), so the bot finds them whatever folder it is started from."""
         env = os.environ if env is None else env
         missing: list[str] = []
+
+        def path(name: str, default: str) -> Path:
+            value = Path(optional(name, default))
+            return value if base_dir is None else base_dir / value
 
         def required(name: str) -> str:
             value = env.get(name, "").strip()
@@ -120,11 +128,11 @@ class Settings:
             pr_summary_role_id=_to_int("PR_SUMMARY_ROLE_ID", role) if role else None,
             timezone=tz,
             reminder_hour=reminder_hour,
-            db_path=Path(optional("DB_PATH", "data/team-bot.db")),
+            db_path=path("DB_PATH", "data/team-bot.db"),
             releases=parse_releases(optional("RELEASES", DEFAULT_RELEASES)),
             review_routing_channel_id=_to_int("REVIEW_ROUTING_CHANNEL_ID", routing_channel),
             review_routing_seconds=routing_seconds or None,
-            review_teams_path=Path(optional("REVIEW_TEAMS_PATH", "review-teams.toml")),
+            review_teams_path=path("REVIEW_TEAMS_PATH", "review-teams.toml"),
         )
 
 

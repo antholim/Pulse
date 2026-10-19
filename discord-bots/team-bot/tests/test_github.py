@@ -97,13 +97,11 @@ async def test_service_lists_open_pull_requests():
 class FakeRoutingClient:
     """githubkit stand-in for the review routing calls: records calls, serves pages."""
 
-    def __init__(self, files_pages=(), graphql=None):
+    def __init__(self, graphql=None):
         self.calls = []
-        self._files_pages = list(files_pages)
         self._graphql = graphql or {}
         self.rest = SimpleNamespace(
             pulls=SimpleNamespace(
-                async_list_files=self._record("files", lambda: self._files_pages.pop(0)),
                 async_request_reviewers=self._record("request", lambda: {}),
             ),
         )
@@ -134,17 +132,7 @@ def test_pull_request_labels_and_updated_at():
     assert gh.pull_request_from_json(PR_JSON).labels == ()
 
 
-async def test_service_changed_files_follows_pages_and_renames():
-    full_page = [{"filename": f"f{n}.py"} for n in range(gh.PAGE_SIZE)]
-    last_page = [{"filename": "new/x.py", "previous_filename": "old/x.py"}]
-    client = FakeRoutingClient(files_pages=[full_page, last_page])
-    files = await routing_service(client).changed_files(12)
-    assert len(files) == gh.PAGE_SIZE + 2
-    assert files[-2:] == ["new/x.py", "old/x.py"]
-    assert [call[2]["page"] for call in client.calls] == [1, 2]
-
-
-async def test_service_closing_issue_labels():
+async def test_service_review_context():
     graphql = {
         "repository": {
             "pullRequest": {
@@ -153,15 +141,18 @@ async def test_service_closing_issue_labels():
                         {"labels": {"nodes": [{"name": "data"}, {"name": "Release 1"}]}},
                         {"labels": {"nodes": [{"name": "infra"}]}},
                     ]
-                }
+                },
+                "timelineItems": {"nodes": [{"createdAt": "2026-10-19T22:59:59Z"}]},
             }
         }
     }
     client = FakeRoutingClient(graphql=graphql)
-    assert await routing_service(client).closing_issue_labels(12) == ["data", "Release 1", "infra"]
+    context = await routing_service(client).review_context(12)
+    assert context.issue_labels == ("data", "Release 1", "infra")
+    assert context.reopened_at == utc("2026-10-19T22:59:59")
     assert client.calls[0] == ("graphql", {"owner": "antholim", "repo": "Pulse", "number": 12})
     empty = FakeRoutingClient(graphql={"repository": {"pullRequest": None}})
-    assert await routing_service(empty).closing_issue_labels(12) == []
+    assert await routing_service(empty).review_context(12) == gh.ReviewContext((), None)
 
 
 async def test_service_request_reviewers():
