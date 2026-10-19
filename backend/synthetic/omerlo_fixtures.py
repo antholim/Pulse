@@ -3,11 +3,13 @@
     uv run python -m synthetic.omerlo_fixtures --seed 490 --out synthetic/out
 
 Writes `<out>/<media id>/<kind>.json` for every resource in `omerlo_schema.MODELS`,
-`participants.json` per tenant (event id to person ids), and `manifest.json`.
+`participants.json` per tenant (event id to person ids), `manifest.json`, and a
+dev-only `ground_truth.dev_only.json` per tenant listing the deliberate duplicates.
 The same seed always produces byte-identical files. All data is invented.
 """
 
 import argparse
+import copy
 import json
 import random
 import re
@@ -25,6 +27,16 @@ from synthetic.omerlo_schema import write_json_schemas
 REFERENCE = datetime(2026, 10, 1, tzinfo=UTC)
 DEFAULT_SEED = 490
 NOTICE = "SYNTHETIC DATA generated for PULSE development. No real person or organization."
+GROUND_TRUTH_NOTICE = (
+    "DEV ONLY. Ground truth of the synthetic duplicates, for checking matching during "
+    "development. Never use it for the official entity resolution evaluation, which needs "
+    "real sponsor-approved data."
+)
+GROUND_TRUTH_FILE = "ground_truth.dev_only.json"
+
+# Ways another source may spell the same organization name, and how often each is picked.
+NAME_CHANGES = ("suffix", "accents", "case", "hyphen", "ampersand")
+NAME_CHANGE_WEIGHTS = (4, 3, 1, 2, 1)
 
 
 @dataclass(frozen=True)
@@ -50,6 +62,9 @@ class Sizes:
     authors: int = 15
     # Share of each tenant's organizations that also exist in the other tenant.
     shared_share: float = 0.25
+    # Share of organizations and people that get a second, differently spelled record.
+    duplicate_org_share: float = 0.12
+    duplicate_person_share: float = 0.04
 
 
 @dataclass
@@ -71,11 +86,16 @@ class TenantData:
     tenant: Tenant
     resources: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     participants: dict[str, list[str]] = field(default_factory=dict)
+    ground_truth: dict[str, Any] = field(default_factory=dict)
+
+
+def fold(text: str) -> str:
+    """Drop accents, keeping case: `Québec` becomes `Quebec`."""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
 
 
 def slugify(text: str) -> str:
-    folded = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")
+    return re.sub(r"[^a-z0-9]+", "-", fold(text).lower()).strip("-")
 
 
 def iso(moment: datetime) -> str:
@@ -323,6 +343,77 @@ class OmerloFixtureGenerator:
     def org_name(self, entity: OrgEntity) -> str:
         return f"{entity.base_name} {entity.suffix}".strip()
 
+    # -------------------------------------------------------------- duplicates
+
+    def name_variant(self, entity: OrgEntity) -> tuple[str, list[str]]:
+        """Another source's spelling of the entity's name, and the changes applied."""
+        original = self.org_name(entity)
+        for _ in range(20):
+            base, suffix, applied = entity.base_name, entity.suffix, []
+            picks = self.rng.choices(NAME_CHANGES, NAME_CHANGE_WEIGHTS, k=self.rng.randint(1, 2))
+            # Fixed order: the suffix lookup needs the suffix before case or accents change it.
+            for change in (c for c in NAME_CHANGES if c in picks):
+                before = (base, suffix)
+                if change == "suffix":
+                    suffix = self.rng.choice(vocab.SUFFIX_VARIANTS[suffix])
+                elif change == "hyphen":
+                    base = base.replace("-", " ")  # Saint-Georges, Saint Georges
+                elif change == "ampersand":
+                    swap = (" & ", " et ") if " & " in base else (" et ", " & ")
+                    base = base.replace(*swap)
+                elif change == "accents":
+                    base, suffix = fold(base), fold(suffix)
+                elif change == "case":
+                    base, suffix = base.upper(), suffix.upper()
+                if (base, suffix) != before:
+                    applied.append(change)
+            name = f"{base} {suffix}".strip()
+            if name != original:
+                return name, applied
+        return original.upper(), ["case"]
+
+    def duplicate_organization(
+        self, entity: OrgEntity, profile_types: list, categories: list
+    ) -> tuple[dict[str, Any], list[str]]:
+        """A second record of `entity`, as another source would hold it."""
+        name, changes = self.name_variant(entity)
+        record = self.organization(entity, name, profile_types, categories)
+        contact = record["contact"]
+        if entity.domain and self.rng.random() < 0.3:
+            record["canonical_domain"] = record["canonical_url"] = None
+            contact["website"] = contact["email"] = None
+            changes.append("missing_domain")
+        if contact["linkedin"] and self.rng.random() < 0.4:
+            contact["linkedin"] = None
+            changes.append("missing_linkedin")
+        if record["metadata"] and self.rng.random() < 0.5:
+            record["metadata"] = []
+            changes.append("missing_crm_id")
+        return record, changes
+
+    def duplicate_person(self, person: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        record, changes = copy.deepcopy(person), []
+        record["id"] = self.new_id()
+        record["canonical_url"] = f"{person['canonical_url']}-{record['id'][:4]}"
+        record["updated_at"] = iso(self.moment())
+        if "-" in record["first_name"]:
+            record["first_name"] = record["first_name"].replace("-", " ")
+            changes.append("hyphen")
+        full = record["first_name"] + record["last_name"]
+        if fold(full) != full:
+            record["first_name"], record["last_name"] = (
+                fold(record["first_name"]),
+                fold(record["last_name"]),
+            )
+            changes.append("accents")
+        if not changes:
+            record["last_name"] = record["last_name"].upper()
+            changes.append("case")
+        if self.rng.random() < 0.5:
+            record["contact"]["email"] = None
+            changes.append("missing_email")
+        return record, changes
+
     def tenant_entities(self, pool: list[OrgEntity], index: int) -> list[OrgEntity]:
         """Tenant 0 takes the start of the pool; tenant 1 shares part of it and adds its own."""
         size = self.sizes.organizations
@@ -334,14 +425,47 @@ class OmerloFixtureGenerator:
     def tenant(self, tenant: Tenant, entities: list[OrgEntity]) -> TenantData:
         sizes = self.sizes
         categories, profile_types = self.categories(), self.profile_types()
-        organizations = [
-            self.organization(e, self.org_name(e), profile_types, categories) for e in entities
-        ]
+        organizations, org_truth, original_ids = [], {}, {}
+        for entity in entities:
+            record = self.organization(entity, self.org_name(entity), profile_types, categories)
+            organizations.append(record)
+            org_truth[record["id"]] = entity.key
+            original_ids[entity.key] = record["id"]
+        org_duplicates = []
+        dup_count = round(len(entities) * sizes.duplicate_org_share)
+        for entity in self.rng.sample(entities, dup_count):
+            record, changes = self.duplicate_organization(entity, profile_types, categories)
+            organizations.append(record)
+            org_truth[record["id"]] = entity.key
+            org_duplicates.append(
+                {
+                    "entity": entity.key,
+                    "record_ids": [original_ids[entity.key], record["id"]],
+                    "changes": changes,
+                }
+            )
+        self.rng.shuffle(organizations)
+
         people = [
             self.person(tenant, organizations, profile_types, journalist=i < sizes.authors)
             for i in range(sizes.people)
         ]
         authors = people[: sizes.authors]
+        person_truth = {p["id"]: i for i, p in enumerate(people)}
+        person_duplicates = []
+        dup_count = round(sizes.people * sizes.duplicate_person_share)
+        for index in self.rng.sample(range(sizes.authors, sizes.people), dup_count):
+            record, changes = self.duplicate_person(people[index])
+            people.append(record)
+            person_truth[record["id"]] = index
+            person_duplicates.append(
+                {
+                    "person": index,
+                    "record_ids": [people[index]["id"], record["id"]],
+                    "changes": changes,
+                }
+            )
+        self.rng.shuffle(people)
         projects = [self.project(tenant, organizations, categories) for _ in range(sizes.projects)]
         events = [self.event(tenant, organizations, categories) for _ in range(sizes.events)]
         participants = {
@@ -363,6 +487,16 @@ class OmerloFixtureGenerator:
             "contents": contents,
         }
         data.participants = participants
+        # Organization keys are shared across tenants: the same key in both tenants'
+        # ground truth is the same real-world organization.
+        data.ground_truth = {
+            "dev_only": True,
+            "notice": GROUND_TRUTH_NOTICE,
+            "organizations": org_truth,
+            "organization_duplicates": org_duplicates,
+            "people": person_truth,
+            "person_duplicates": person_duplicates,
+        }
         return data
 
     def generate(self) -> list[TenantData]:
@@ -385,6 +519,7 @@ def write_fixtures(tenants: list[TenantData], out_dir: Path, seed: int) -> None:
         for kind, records in data.resources.items():
             (tenant_dir / f"{kind}.json").write_text(dump(records), encoding="utf-8")
         (tenant_dir / "participants.json").write_text(dump(data.participants), encoding="utf-8")
+        (tenant_dir / GROUND_TRUTH_FILE).write_text(dump(data.ground_truth), encoding="utf-8")
     manifest = {
         "synthetic": True,
         "notice": NOTICE,

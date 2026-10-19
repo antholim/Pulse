@@ -3,6 +3,7 @@ import json
 import pytest
 
 from synthetic.omerlo_fixtures import (
+    GROUND_TRUTH_FILE,
     NOTICE,
     TENANTS,
     OmerloFixtureGenerator,
@@ -57,7 +58,7 @@ def test_counts_match_the_requested_sizes(out_dir, tenant):
     sizes = Sizes()
     counts = {kind: len(load(out_dir, tenant.media_id, kind)) for kind in MODELS}
 
-    assert counts["people"] == sizes.people
+    assert counts["people"] >= sizes.people
     assert counts["contents"] == sizes.contents
     assert counts["events"] == sizes.events
     assert counts["projects"] == sizes.projects
@@ -137,3 +138,69 @@ def test_cli_writes_fixtures_and_schemas(tmp_path):
 
     assert (tmp_path / "out" / "manifest.json").exists()
     assert (tmp_path / "schemas" / "organizations.schema.json").exists()
+
+
+def ground_truth(out_dir, media_id):
+    return json.loads((out_dir / media_id / GROUND_TRUTH_FILE).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("tenant", TENANTS, ids=lambda t: t.media_id)
+def test_ground_truth_is_marked_dev_only_and_covers_every_record(out_dir, tenant):
+    truth = ground_truth(out_dir, tenant.media_id)
+
+    assert truth["dev_only"] is True
+    assert "Never use it for the official" in truth["notice"]
+    org_ids = {o["id"] for o in load(out_dir, tenant.media_id, "organizations")}
+    person_ids = {p["id"] for p in load(out_dir, tenant.media_id, "people")}
+    assert set(truth["organizations"]) == org_ids
+    assert set(truth["people"]) == person_ids
+
+
+@pytest.mark.parametrize("tenant", TENANTS, ids=lambda t: t.media_id)
+def test_duplicates_are_differently_spelled_records_of_one_entity(out_dir, tenant):
+    truth = ground_truth(out_dir, tenant.media_id)
+    organizations = {o["id"]: o for o in load(out_dir, tenant.media_id, "organizations")}
+    clusters = truth["organization_duplicates"]
+
+    assert len(clusters) >= Sizes().organizations * 0.1
+    for cluster in clusters:
+        original, duplicate = (organizations[i] for i in cluster["record_ids"])
+        assert original["name"] != duplicate["name"]
+        assert cluster["changes"]
+        assert {truth["organizations"][i] for i in cluster["record_ids"]} == {cluster["entity"]}
+
+    people = {p["id"]: p for p in load(out_dir, tenant.media_id, "people")}
+    assert truth["person_duplicates"]
+    for cluster in truth["person_duplicates"]:
+        original, duplicate = (people[i] for i in cluster["record_ids"])
+        assert (original["first_name"], original["last_name"]) != (
+            duplicate["first_name"],
+            duplicate["last_name"],
+        )
+
+
+def test_duplicates_need_both_exact_and_fuzzy_matching(out_dir):
+    """Some pairs share a strong identifier (Tier 1); others share none (Tier 2 only)."""
+    organizations = {o["id"]: o for o in load(out_dir, "demo-capitale", "organizations")}
+
+    def identifiers(org):
+        crm = {m["value"] for m in org["metadata"] if m["key"] == "crm_id"}
+        return {org["canonical_domain"], org["contact"]["linkedin"], *crm} - {None}
+
+    shared = [
+        bool(identifiers(organizations[a]) & identifiers(organizations[b]))
+        for a, b in (
+            c["record_ids"]
+            for c in ground_truth(out_dir, "demo-capitale")["organization_duplicates"]
+        )
+    ]
+    assert any(shared)
+    assert not all(shared)
+
+
+def test_ground_truth_keys_identify_organizations_across_tenants(out_dir):
+    first, second = (
+        set(ground_truth(out_dir, t.media_id)["organizations"].values()) for t in TENANTS
+    )
+
+    assert first & second
