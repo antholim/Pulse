@@ -40,5 +40,39 @@ Docker Compose builds and starts the following services:
 To run only PostgreSQL while developing the frontend and backend locally:
 
 ```bash
-docker
+docker compose up db
+```
+
+## Code style
+
+| Area                    | Linter | Formatter | Config                                  |
+| ----------------------- | ------ | --------- | --------------------------------------- |
+| Backend and Python code | Ruff   | Ruff      | `backend/pyproject.toml`, `ruff.toml`   |
+| Frontend                | ESLint | Prettier  | `frontend/eslint.config.js`, `frontend/.prettierrc.json` |
+
+Editor-wide settings (indentation, line endings) live in `.editorconfig`. VS Code and Cursor will suggest the matching extensions from `.vscode/extensions.json`.
+
+### One-time setup
+
+```bash
+pip install pre-commit
+pre-commit install
+cd backend && uv sync
+cd ../frontend && npm ci
+```
+
+After this, every `git commit` formats and lints the staged files automatically. If a hook changes a file, review the change, `git add` it and commit again.
+
+### Running the checks manually
+
+```bash
+pre-commit run --all-files          # everything
+
+cd backend
+uv run ruff check --fix .           # lint
+uv run ruff format .                # format
+
+cd frontend
+npm run lint
+npm run format
 ```

@@ -1,0 +1,9 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[lint.per-file-ignores]
+# Ticket descriptions are long prose strings that read better unwrapped.
+"scripts/tickets/data.py" = ["E501"]

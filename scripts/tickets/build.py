@@ -7,6 +7,7 @@
 
 See README.md for details.
 """
+
 import hashlib
 import json
 import re
@@ -56,6 +57,7 @@ PRIORITY_TEXT = {
 
 # ------------------------------------------------------------------ rendering
 
+
 def is_epic(t):
     return t["key"] in EPIC_BY_KEY
 
@@ -78,11 +80,13 @@ def short_epic_title(key):
 
 def resolve(text, numbers):
     """Replace {KEY} tokens with #N when known, else leave the plain key."""
+
     def sub(m):
         key = m.group(1)
         if key not in ALL_BY_KEY:
             raise KeyError(f"Unknown token {{{key}}}")
         return f"#{numbers[key]}" if key in numbers else key
+
     return TOKEN.sub(sub, text)
 
 
@@ -107,7 +111,13 @@ def render_issue(i, numbers):
     ]
     if "story" in i:
         who, want, so = i["story"]
-        lines += ["## User story", f"**As a** {who},", f"**I want** {want},", f"**so that** {so}.", ""]
+        lines += [
+            "## User story",
+            f"**As a** {who},",
+            f"**I want** {want},",
+            f"**so that** {so}.",
+            "",
+        ]
     else:
         lines += ["## Goal", i["goal"], ""]
     lines += ["## Context", i["context"], ""]
@@ -118,7 +128,12 @@ def render_issue(i, numbers):
     blocks = [ref(k, numbers) for k in i["blocks"]]
     if i.get("extra_blocks"):
         blocks.append(i["extra_blocks"])
-    lines += ["## Dependencies", f"- **Blocked by:** {blocked}", f"- **Blocks:** {', '.join(blocks) or 'None'}", ""]
+    lines += [
+        "## Dependencies",
+        f"- **Blocked by:** {blocked}",
+        f"- **Blocks:** {', '.join(blocks) or 'None'}",
+        "",
+    ]
 
     if i["out_of_scope"]:
         lines += ["## Out of scope"] + [f"- {o}" for o in i["out_of_scope"]] + [""]
@@ -132,7 +147,11 @@ def render_epic(e, numbers):
     prio = next((p for p in ("must", "should", "could") if p in e["labels"]), None)
     lines = ["## Goal", e["goal"], ""]
     lines += ["## Scope"] + [f"- {s}" for s in e["scope"]] + [""]
-    lines += ["## Priority", PRIORITY_TEXT[prio] if prio else "Ongoing: refreshed at every release.", ""]
+    lines += [
+        "## Priority",
+        PRIORITY_TEXT[prio] if prio else "Ongoing: refreshed at every release.",
+        "",
+    ]
     lines += ["## Success criteria"] + [f"- {s}" for s in e["success"]] + [""]
     if e["out_of_scope"]:
         lines += ["## Out of scope"] + [f"- {o}" for o in e["out_of_scope"]] + [""]
@@ -154,7 +173,10 @@ def render_epic(e, numbers):
     later = [f"{r} ({ITERATIONS[RELEASES[r]][1]})" for r in RELEASES if RELEASES[r] > last_planned]
     if later:
         dates = " and the ".join(later) if len(later) == 2 else ", ".join(later)
-        lines += ["## Later releases", f"Stories for {dates} will be added as sub-issues of this epic."]
+        lines += [
+            "## Later releases",
+            f"Stories for {dates} will be added as sub-issues of this epic.",
+        ]
     return resolve("\n".join(lines), numbers).rstrip() + "\n"
 
 
@@ -164,13 +186,14 @@ def render(t, numbers):
 
 # ----------------------------------------------------------------- validation
 
+
 def validate(existing_labels):
     problems = []
-    known_labels = set(existing_labels) | {l[0] for l in NEW_LABELS}
+    known_labels = set(existing_labels) | {label[0] for label in NEW_LABELS}
     for t in EPICS + ISSUES:
-        for l in labels_for(t):
-            if l not in known_labels:
-                problems.append(f"{t['key']}: unknown label '{l}' (add it to NEW_LABELS)")
+        for label in labels_for(t):
+            if label not in known_labels:
+                problems.append(f"{t['key']}: unknown label '{label}' (add it to NEW_LABELS)")
     for i in ISSUES:
         if i["epic"] not in EPIC_BY_KEY:
             problems.append(f"{i['key']}: unknown epic {i['epic']}")
@@ -186,8 +209,10 @@ def validate(existing_labels):
                 problems.append(f"{i['key']} blocks {k}, but {k} does not list it in blocked_by")
         for k in i["blocked_by"]:
             if k in ISSUE_BY_KEY and ISSUE_BY_KEY[k]["iteration"] > i["iteration"]:
-                problems.append(f"{i['key']} (iteration {i['iteration']}) is blocked by {k}, "
-                                f"which is planned later (iteration {ISSUE_BY_KEY[k]['iteration']})")
+                problems.append(
+                    f"{i['key']} (iteration {i['iteration']}) is blocked by {k}, "
+                    f"which is planned later (iteration {ISSUE_BY_KEY[k]['iteration']})"
+                )
     return problems
 
 
@@ -201,6 +226,7 @@ def check_text(t, body):
 
 
 # ---------------------------------------------------------------- GitHub side
+
 
 def gh(*args):
     r = subprocess.run([GH, *args], capture_output=True, text=True, encoding="utf-8")
@@ -218,10 +244,7 @@ def digest(body):
 
 
 def load_state():
-    if STATE_FILE.exists():
-        state = json.loads(STATE_FILE.read_text())
-    else:
-        state = {}
+    state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
     for k, v in (("numbers", {}), ("linked", []), ("hashes", {})):
         state.setdefault(k, v)
     return state
@@ -232,7 +255,18 @@ def save_state(state):
 
 
 def remote_bodies():
-    raw = gh("issue", "list", "--repo", REPO, "--state", "all", "--limit", "1000", "--json", "number,body")
+    raw = gh(
+        "issue",
+        "list",
+        "--repo",
+        REPO,
+        "--state",
+        "all",
+        "--limit",
+        "1000",
+        "--json",
+        "number,body",
+    )
     return {i["number"]: i["body"] or "" for i in json.loads(raw)}
 
 
@@ -270,7 +304,9 @@ def write_body(t, body):
 def dry_run():
     state = load_state()
     numbers = state["numbers"]
-    existing = gh("label", "list", "--repo", REPO, "--limit", "500", "--json", "name", "--jq", ".[].name").splitlines()
+    existing = gh(
+        "label", "list", "--repo", REPO, "--limit", "500", "--json", "name", "--jq", ".[].name"
+    ).splitlines()
     problems = validate(existing)
 
     for t in EPICS + ISSUES:
@@ -284,14 +320,16 @@ def dry_run():
 
     new = [t["key"] for t in EPICS + ISSUES if t["key"] not in numbers]
     to_update, edited = plan_updates(state, remote_bodies())
-    updates = ["%s (#%d)" % (t["key"], numbers[t["key"]]) for t in to_update]
+    updates = [f"{t['key']} (#{numbers[t['key']]})" for t in to_update]
     print("\n--apply would create: " + (", ".join(new) or "nothing"))
     print("--apply would update: " + (", ".join(updates) or "nothing"))
     if edited:
         print("Edited on GitHub since the last run, so they will be SKIPPED:")
         for t in edited:
-            print("  %s (#%d): copy the GitHub changes into data.py; once the rendered body "
-                  "matches GitHub, the next --apply adopts it again" % (t["key"], numbers[t["key"]]))
+            print(
+                f"  {t['key']} (#{numbers[t['key']]}): copy the GitHub changes into data.py; "
+                "once the rendered body matches GitHub, the next --apply adopts it again"
+            )
     return not problems
 
 
@@ -303,17 +341,36 @@ def apply():
 
     print("\nLabels...")
     for name, color, desc in NEW_LABELS:
-        gh("label", "create", name, "--repo", REPO, "--color", color, "--description", desc, "--force")
+        gh(
+            "label",
+            "create",
+            name,
+            "--repo",
+            REPO,
+            "--color",
+            color,
+            "--description",
+            desc,
+            "--force",
+        )
 
     print("Creating missing tickets...")
     created_now = []
     for t in EPICS + ISSUES:
         if t["key"] in numbers:
             continue
-        args = ["issue", "create", "--repo", REPO, "--title", t["title"],
-                "--body-file", str(write_body(t, render(t, numbers)))]
-        for l in labels_for(t):
-            args += ["--label", l]
+        args = [
+            "issue",
+            "create",
+            "--repo",
+            REPO,
+            "--title",
+            t["title"],
+            "--body-file",
+            str(write_body(t, render(t, numbers))),
+        ]
+        for label in labels_for(t):
+            args += ["--label", label]
         if not is_epic(t):
             args += ["--milestone", milestone(t)]
         url = gh(*args)
@@ -327,7 +384,15 @@ def apply():
     save_state(state)
     for t in to_update:
         body = render(t, numbers)
-        gh("issue", "edit", str(numbers[t["key"]]), "--repo", REPO, "--body-file", str(write_body(t, body)))
+        gh(
+            "issue",
+            "edit",
+            str(numbers[t["key"]]),
+            "--repo",
+            REPO,
+            "--body-file",
+            str(write_body(t, body)),
+        )
         state["hashes"][t["key"]] = digest(body)
         save_state(state)
         print(f"  updated {t['key']} (#{numbers[t['key']]})")
@@ -339,8 +404,16 @@ def apply():
         if i["key"] in state["linked"]:
             continue
         child_id = gh("api", f"repos/{REPO}/issues/{numbers[i['key']]}", "--jq", ".id")
-        gh("api", "-X", "POST", f"repos/{REPO}/issues/{numbers[i['epic']]}/sub_issues",
-           "-F", f"sub_issue_id={child_id}", "-H", "X-GitHub-Api-Version: 2022-11-28")
+        gh(
+            "api",
+            "-X",
+            "POST",
+            f"repos/{REPO}/issues/{numbers[i['epic']]}/sub_issues",
+            "-F",
+            f"sub_issue_id={child_id}",
+            "-H",
+            "X-GitHub-Api-Version: 2022-11-28",
+        )
         state["linked"].append(i["key"])
         save_state(state)
         print(f"  {i['key']} -> {i['epic']}")

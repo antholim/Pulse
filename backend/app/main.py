@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import check_database
 from sqlalchemy.exc import SQLAlchemyError
+
+from app.core.database import check_database
 
 app = FastAPI(
     title="PULSE API",
@@ -22,13 +23,14 @@ app.add_middleware(
 def health_check():
     return {"status": "ok", "service": "pulse-backend"}
 
+
 @app.get("/health/db")
 def database_health():
     try:
         check_database()
         return {"database": "connected"}
-    except SQLAlchemyError:
+    except SQLAlchemyError as err:
         raise HTTPException(
             status_code=503,
             detail="Database unavailable",
-        )
+        ) from err
