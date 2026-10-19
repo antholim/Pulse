@@ -77,6 +77,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: needs a real PostgreSQL database (TEST_DATABASE_URL); skipped when unset",
+]
 
 [tool.ruff]
 line-length = 100

@@ -19,6 +19,26 @@ services:
       timeout: 5s
       retries: 10
 
+  # Throwaway PostgreSQL for integration tests (data kept in memory)
+  test-db:
+    profiles: ["test"]
+    image: postgres:17
+    environment:
+      POSTGRES_USER: pulse_test
+      POSTGRES_PASSWORD: pulse_test
+      POSTGRES_DB: pulse_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U pulse_test -d pulse_test
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
   # FastAPI backend
   backend:
     profiles: ["full"]
