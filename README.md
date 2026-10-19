@@ -1,5 +1,7 @@
 # PULSE
 
+[![CI](https://github.com/antholim/Pulse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/antholim/Pulse/actions/workflows/ci.yml)
+
 SOEN 490 Capstone Project
 
 ## Local development with Docker
