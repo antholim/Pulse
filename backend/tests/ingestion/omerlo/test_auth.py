@@ -1,4 +1,8 @@
+import asyncio
 import logging
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import parse_qs
 
 import httpx
@@ -109,6 +113,35 @@ def test_token_is_refreshed_before_expiry(client, clock):
 
     assert token_route.call_count == 2
     assert api_route.calls.last.request.headers["Authorization"] == "Bearer tok-2"
+
+
+@respx.mock
+def test_short_lived_token_is_reused_until_half_its_lifetime(client, clock):
+    # expires_in (30 s) is shorter than the 60 s margin, so the margin shrinks to 15 s.
+    token_route = respx.post(TOKEN_URL).mock(
+        side_effect=[token_response("tok-1", expires_in=30), token_response("tok-2")]
+    )
+    respx.get(CONTENTS_URL).mock(return_value=httpx.Response(200))
+
+    client.get("/api/media/v1/contents")
+    clock.now += 14
+    client.get("/api/media/v1/contents")
+    assert token_route.call_count == 1
+
+    clock.now += 1
+    client.get("/api/media/v1/contents")
+    assert token_route.call_count == 2
+
+
+@respx.mock
+@pytest.mark.parametrize("expires_in", ["soon", [3600], {"s": 1}])
+def test_invalid_expires_in_raises(client, expires_in):
+    respx.post(TOKEN_URL).mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-1", "expires_in": expires_in})
+    )
+
+    with pytest.raises(OmerloAuthError, match="invalid expires_in"):
+        client.get("/api/media/v1/contents")
 
 
 @respx.mock
@@ -252,3 +285,70 @@ def test_settings_load_from_environment(monkeypatch):
     assert loaded.media_id == "media-42"
     assert loaded.client_secret.get_secret_value() == SECRET
     assert SECRET not in repr(loaded)
+
+
+def test_async_clients_are_refused(settings):
+    async def call():
+        async with httpx.AsyncClient(auth=OmerloAuth(settings)) as c:
+            await c.get(CONTENTS_URL)
+
+    with pytest.raises(NotImplementedError, match=r"httpx\.AsyncClient"):
+        asyncio.run(call())
+
+
+def run_in_threads(client, count=8):
+    """Send `count` requests at the same moment from different threads."""
+    start = threading.Barrier(count)
+
+    def call(_):
+        start.wait()
+        return client.get("/api/media/v1/contents")
+
+    with ThreadPoolExecutor(max_workers=count) as pool:
+        return list(pool.map(call, range(count)))
+
+
+@respx.mock
+def test_parallel_first_requests_fetch_one_token(client):
+    def slow_token(request):
+        time.sleep(0.2)  # every thread arrives while the first token request is in flight
+        return token_response("tok-1")
+
+    token_route = respx.post(TOKEN_URL).mock(side_effect=slow_token)
+    api_route = respx.get(CONTENTS_URL).mock(return_value=httpx.Response(200))
+
+    responses = run_in_threads(client)
+
+    assert all(r.status_code == 200 for r in responses)
+    assert token_route.call_count == 1
+    assert {c.request.headers["Authorization"] for c in api_route.calls} == {"Bearer tok-1"}
+
+
+@respx.mock
+def test_parallel_401s_refresh_the_token_once(client):
+    tokens = iter(["tok-1", "tok-2"])
+
+    def next_token(request):
+        time.sleep(0.1)
+        return token_response(next(tokens))
+
+    revoked = set()
+
+    def api(request):
+        token = request.headers["Authorization"].removeprefix("Bearer ")
+        if token in revoked:
+            time.sleep(0.1)  # every thread sends the old token before any 401 comes back
+            return httpx.Response(401)
+        return httpx.Response(200)
+
+    token_route = respx.post(TOKEN_URL).mock(side_effect=next_token)
+    api_route = respx.get(CONTENTS_URL).mock(side_effect=api)
+    client.get("/api/media/v1/contents")
+    revoked.add("tok-1")  # every thread now starts with a token the API rejects
+
+    responses = run_in_threads(client)
+
+    assert all(r.status_code == 200 for r in responses)
+    assert token_route.call_count == 2
+    rejected = [c for c in api_route.calls if c.response.status_code == 401]
+    assert len(rejected) == 8
