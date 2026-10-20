@@ -316,13 +316,16 @@ def meta_of(t):
 
 
 def plan_meta(state, remote, overwrite=()):
-    """Plan title, milestone and label changes as (changes, edited_on_github).
+    """Plan title, milestone and label changes as (changes, skipped).
 
     state["meta"] holds what the script last wrote. A title or milestone is only
     changed if GitHub still shows that value (nobody edited it by hand), or the
-    key is listed in `overwrite`. Labels from data.py are added; a label is only
-    removed if the script added it and data.py no longer lists it, so labels
-    people add by hand are never touched.
+    key is listed in `overwrite`. Each skipped entry is (ticket, field, GitHub value,
+    data.py value, tracked); `tracked` is False when the script never recorded the
+    field (issues created before it tracked titles and milestones).
+
+    Labels from data.py are added; a label is only removed if the script added it
+    and data.py no longer lists it, so labels people add by hand are never touched.
     """
     numbers = state["numbers"]
     changes, edited = [], []
@@ -339,7 +342,8 @@ def plan_meta(state, remote, overwrite=()):
             if current[field] == base.get(field) or key in overwrite:
                 edit[field] = wanted[field]
             else:
-                edited.append((t, field, current[field], wanted[field]))
+                tracked = key in state["meta"]
+                edited.append((t, field, current[field], wanted[field], tracked))
         add = sorted(set(wanted["labels"]) - set(current["labels"]))
         remove = sorted(
             (set(base.get("labels", [])) - set(wanted["labels"])) & set(current["labels"])
@@ -430,13 +434,18 @@ def dry_run(overwrite=()):
     print("--apply would change titles, milestones or labels:" + ("" if changes else " nothing"))
     for t, edit in changes:
         print(f"  {t['key']} (#{numbers[t['key']]}): {describe(edit)}")
-    if meta_edited:
-        print("Changed on GitHub by hand, so they will be SKIPPED:")
-        for t, field, current, wanted in meta_edited:
+    for tracked, heading in (
+        (True, "Changed on GitHub by hand, so they will be SKIPPED:"),
+        (False, "Not tracked by the script yet, so they will be SKIPPED:"),
+    ):
+        skipped = [s for s in meta_edited if s[4] is tracked]
+        if skipped:
+            print(heading)
+        for t, field, current, wanted, _ in skipped:
             print(
                 f"  {t['key']} (#{numbers[t['key']]}) {field}: GitHub has {current!r}, "
                 f"data.py has {wanted!r}. Update data.py to keep GitHub's value, "
-                f"or pass --overwrite {t['key']} to apply data.py's"
+                f"or pass --overwrite {t['key']} to adopt data.py's"
             )
     return not problems
 
@@ -530,8 +539,9 @@ def apply(overwrite=()):
         if t["key"] in numbers and t["key"] not in created_now and numbers[t["key"]] in remote:
             record_meta(state, t, remote[numbers[t["key"]]], changed.get(t["key"]))
     save_state(state)
-    for t, field, _, _ in meta_edited:
-        print(f"  SKIPPED {t['key']} (#{numbers[t['key']]}) {field}: changed on GitHub by hand")
+    for t, field, _, _, tracked in meta_edited:
+        reason = "changed on GitHub by hand" if tracked else "not tracked by the script yet"
+        print(f"  SKIPPED {t['key']} (#{numbers[t['key']]}) {field}: {reason}")
 
     print("Linking issues to their epics...")
     for i in ISSUES:
