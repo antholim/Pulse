@@ -43,16 +43,27 @@ def test_route_can_override_a_security_header():
     assert response.headers["Referrer-Policy"] == "no-referrer"
 
 
-def test_cors_allows_the_frontend_origin():
+@pytest.mark.parametrize("method", ["GET", "QUERY"])
+def test_cors_allows_the_frontend_origin(method):
     origin = cors_origins()[0]
 
     response = client.options(
         "/api/health",
-        headers={"Origin": origin, "Access-Control-Request-Method": "GET"},
+        headers={"Origin": origin, "Access-Control-Request-Method": method},
     )
 
     assert response.status_code == 200
     assert response.headers["Access-Control-Allow-Origin"] == origin
+    assert method in response.headers["Access-Control-Allow-Methods"]
+
+
+def test_cors_rejects_unlisted_methods():
+    response = client.options(
+        "/api/health",
+        headers={"Origin": cors_origins()[0], "Access-Control-Request-Method": "TRACE"},
+    )
+
+    assert response.status_code == 400
 
 
 def test_cors_rejects_other_origins():

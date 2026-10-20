@@ -15,7 +15,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    # QUERY is the new safe, body-carrying read method (IETF draft "The HTTP QUERY Method").
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.add_middleware(SecurityHeadersMiddleware)
