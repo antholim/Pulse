@@ -56,6 +56,8 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://pulse:pulse@localhost:5432/pulse_test
+      # Turns on the integration tests (backend/tests/integration) against the service above.
+      TEST_DATABASE_URL: postgresql+psycopg://pulse:pulse@localhost:5432/pulse_test
     defaults:
       run:
         working-directory: backend
@@ -66,7 +68,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --locked
-      - run: uv run pytest
+      # Fails below the coverage minimum in pyproject.toml.
+      - run: uv run pytest --cov
 
   frontend-build:
     name: Frontend build
@@ -82,6 +85,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # Fails below the coverage thresholds in vite.config.ts.
+      - run: npm run coverage
       - run: npm run build
 
   docker-build:

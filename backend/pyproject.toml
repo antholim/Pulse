@@ -69,12 +69,17 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.17.0",
     "ruff>=0.17.1",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: needs a real PostgreSQL database (TEST_DATABASE_URL); skipped when unset",
+]
 
 [tool.ruff]
 line-length = 100
@@ -85,3 +90,13 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+# CI fails below this; core logic modules aim for 80 percent.
+fail_under = 50
+show_missing = true
+skip_empty = true

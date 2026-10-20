@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.database import check_database
+from app.core.database import DatabaseNotConfiguredError, check_database
 
 app = FastAPI(
     title="PULSE API",
@@ -29,7 +29,7 @@ def database_health():
     try:
         check_database()
         return {"database": "connected"}
-    except SQLAlchemyError as err:
+    except (SQLAlchemyError, DatabaseNotConfiguredError) as err:
         raise HTTPException(
             status_code=503,
             detail="Database unavailable",
