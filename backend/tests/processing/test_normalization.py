@@ -1,5 +1,7 @@
 """Tests for identifier normalization (#26)."""
 
+import unicodedata
+
 import pytest
 
 from app.processing import normalization as norm
@@ -92,6 +94,9 @@ def test_legal_suffixes_loader_is_cached():
         ("Acme Technologies senc", "acme technologies"),
         ("Foo Coopérative", "foo"),
         ("Transport Gosselin enr.", "transport gosselin"),
+        ("Acme & Co", "acme"),
+        ("Acme Co", "acme"),
+        ("Acme and Company", "acme"),
     ],
 )
 def test_normalize_organization_name(raw, expected):
@@ -108,6 +113,8 @@ def test_normalize_organization_name(raw, expected):
         ("Groupe St-Pierre", "Groupe St Pierre"),
         ("Coopérative de Rimouski", "Cooperative de Rimouski"),
         ("TRANSPORT GOSSELIN INC.", "Transport Gosselin"),
+        ("Acme & Co", "Acme Co"),
+        ("Acme & Co.", "Acme and Company"),
     ],
 )
 def test_organization_variants_share_a_key(left, right):
@@ -196,6 +203,13 @@ def test_domain_extractor_never_fetches():
 )
 def test_normalize_linkedin(raw, expected):
     assert normalize_linkedin(raw) == expected
+
+
+def test_normalize_linkedin_accepts_nfd_accented_slug():
+    """Decomposed Unicode (NFD) must match the composed vanity slug."""
+    nfd_slug = "marie-" + unicodedata.normalize("NFD", "ève")
+    assert normalize_linkedin(f"in/{nfd_slug}") == "in/marie-ève"
+    assert normalize_linkedin(f"in/{nfd_slug}") == normalize_linkedin("in/marie-ève")
 
 
 @pytest.mark.parametrize(

@@ -154,12 +154,21 @@ def _strip_trailing_legal_suffixes(tokens: list[str]) -> list[str]:
     return tokens
 
 
+def _strip_trailing_connectors(tokens: list[str]) -> list[str]:
+    """Drop a dangling connector left after suffix strip (``Acme & Co`` → ``acme``)."""
+    while tokens and tokens[-1] == CONNECTOR_TOKEN:
+        tokens = tokens[:-1]
+    return tokens
+
+
 def normalize_organization_name(value: str | None) -> str | None:
     """Return a comparison key for an organization name, or None if unusable."""
     raw = _blank_to_none(value)
     if raw is None:
         return None
-    tokens = _strip_trailing_legal_suffixes(_tokenize_name(raw))
+    tokens = _strip_trailing_connectors(
+        _strip_trailing_legal_suffixes(_tokenize_name(raw))
+    )
     if not tokens:
         return None
     return " ".join(tokens)
@@ -204,9 +213,10 @@ def _normalize_linkedin_slug(raw_slug: str) -> str | None:
     """Decode and validate a LinkedIn vanity slug.
 
     Accepts Unicode letters (including accents), digits and hyphens. Percent-
-    encoded slugs such as ``marie-%C3%A8ve`` become ``marie-ève``.
+    encoded slugs such as ``marie-%C3%A8ve`` become ``marie-ève``. NFC
+    composition keeps NFD (decomposed) input matching the composed form.
     """
-    slug = unquote(raw_slug.strip()).casefold()
+    slug = unicodedata.normalize("NFC", unquote(raw_slug.strip())).casefold()
     if (
         not slug
         or slug.startswith("-")
