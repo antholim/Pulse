@@ -362,7 +362,14 @@ def record_meta(state, t, remote_entry=None, edit=None):
             remote_entry is None or remote_entry[field] == wanted[field] or field in (edit or {})
         )
         entry[field] = wanted[field] if settled else base.get(field)
-    entry["labels"] = wanted["labels"]
+    if remote_entry is None:
+        # Just created by the script, so it set every label.
+        entry["labels"] = wanted["labels"]
+    else:
+        # Only labels the script wrote before or adds now; a label someone added by hand
+        # stays theirs even if data.py also lists it.
+        kept = set(base.get("labels", [])) & set(wanted["labels"])
+        entry["labels"] = sorted(kept | set((edit or {}).get("add", [])))
     state["meta"][t["key"]] = entry
 
 
