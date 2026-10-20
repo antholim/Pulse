@@ -5,7 +5,6 @@ These field names are examples. Update them to match actual mapper outputs.
 
 from app.processing.cleaning import CleaningConfig, FieldRule
 
-
 CONFIGS = {
     "event": CleaningConfig(
         fields={
@@ -13,7 +12,12 @@ CONFIGS = {
             "name": FieldRule(required=True),
             "start_at": FieldRule(
                 type="datetime",
-                input_formats=("%d/%m/%Y %H:%M",),
+                input_formats=(
+                    # Canadian format
+                    "%d/%m/%Y %H:%M",
+                    # American format
+                    "%m-%d-%Y %H:%M",
+                ),
                 source_timezone="America/Toronto",
             ),
             "active": FieldRule(type="boolean"),

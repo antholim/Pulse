@@ -1,6 +1,6 @@
 """Unit tests for PULSE cleaning. Each test uses Arrange, Act, Assert."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -97,7 +97,7 @@ def test_unicode_normalization_nfc():
     [
         ("QuÃ©bec", "Québec"),
         ("FranÃ§ais", "Français"),
-        ("Itâ€™s", "It’s"),
+        ("Itâ€™s", "It\u2019s"),
     ],
 )
 def test_common_encoding_repairs(broken, fixed):
@@ -694,7 +694,7 @@ def test_basic_clean_finite_float_and_missing_nested():
 def test_convert_accepts_datetime_object():
     # Arrange
     rule = FieldRule(type="datetime")
-    value = datetime(2026, 10, 20, 10, 0, tzinfo=timezone.utc)
+    value = datetime(2026, 10, 20, 10, 0, tzinfo=UTC)
     # Act
     result = _convert(value, rule)
     # Assert

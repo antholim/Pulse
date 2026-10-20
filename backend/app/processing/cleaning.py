@@ -1,5 +1,8 @@
 """Clean PULSE data after mapping and before storage.
 
+The original raw payload must be archived before mapping and cleaning.
+This module only cleans mapped records and does not handle raw data storage.
+
 The cleaner handles missing values, whitespace, Unicode, common encoding
 problems, numbers, booleans, dates, emails, categories, and duplicate records.
 Problems are flagged with the original value instead of silently deleting data.
@@ -8,15 +11,14 @@ The caller supplies existing records for historical duplicate checks.
 This module does not connect to a database by itself.
 """
 
-from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import hashlib
 import json
 import math
 import re
 import unicodedata
-
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 MISSING_VALUES = {"", "n/a", "na", "null", "none", "unknown", "-"}
 TRUE_VALUES = {"true", "yes", "oui", "1"}
@@ -136,9 +138,7 @@ def _parse_date(value, rule):
 
     date_value = None
 
-    if isinstance(value, datetime):
-        date_value = value
-    elif isinstance(value, date):
+    if isinstance(value, (datetime, date, date)):
         date_value = value
     elif isinstance(value, str):
         text = value
@@ -191,8 +191,8 @@ def _parse_date(value, rule):
         # Check daylight saving time: some local times are missing or occur twice.
         first = date_value.replace(tzinfo=local_timezone, fold=0)
         second = date_value.replace(tzinfo=local_timezone, fold=1)
-        first_back = first.astimezone(timezone.utc).astimezone(local_timezone)
-        second_back = second.astimezone(timezone.utc).astimezone(local_timezone)
+        first_back = first.astimezone(UTC).astimezone(local_timezone)
+        second_back = second.astimezone(UTC).astimezone(local_timezone)
         first_valid = first_back.replace(tzinfo=None) == date_value
         second_valid = second_back.replace(tzinfo=None) == date_value
 
@@ -203,7 +203,7 @@ def _parse_date(value, rule):
 
         date_value = first if first_valid else second
 
-    return date_value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return date_value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _convert(value, rule):
@@ -222,9 +222,8 @@ def _convert(value, rule):
         if isinstance(value, bool):
             raise ValueError("invalid number")
 
-        if isinstance(value, str) and rule.decimal_comma:
-            if "," in value and "." not in value:
-                value = value.replace(",", ".")
+        if isinstance(value, str) and rule.decimal_comma and "," in value and "." not in value:
+            value = value.replace(",", ".")
 
         try:
             value = float(value)
