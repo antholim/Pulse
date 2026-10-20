@@ -71,7 +71,8 @@
     "S2-01": 111,
     "S2-02": 112,
     "S2-03": 113,
-    "S2-04": 114
+    "S2-04": 114,
+    "S1-57": 115
   },
   "linked": [
     "S1-01",
@@ -132,11 +133,12 @@
     "S2-01",
     "S2-02",
     "S2-03",
-    "S2-04"
+    "S2-04",
+    "S1-57"
   ],
   "hashes": {
     "E1": "3f1ea51a0fcf4845e6d965b7826cc4309ab81709bb4886426641467551b4630a",
-    "E2": "a76d513cc5779454f6ef989ac51f89707f0af0c979322917f9ffbbe90f68f638",
+    "E2": "345d45918d95fe02266661470a0a4219584712b3c1d886d5d8e9e331d3648e19",
     "E3": "ca1222bb48443b6d0f59dfe86115c26a28c1c489c4ec828848466deccad80dce",
     "E4": "541919b4fce5716e7e173eb688fe3a24d7dccc4e7a79d6f521b00e6e827a5aa5",
     "E5": "1dbdf1b35b585c65bbfe412750244bfbfcdf2a096ee425d8c32b1037c30e17ba",
@@ -206,7 +208,8 @@
     "S1-54": "f653712d8805cf573d9ee1b235b09dfe586debf0cea87b01970d39c6ed11ef6e",
     "S1-55": "52cb5dc685e4b20c14017a5dad0524b154e88f459dbff50aa479ed63377a6c7d",
     "S1-56": "e04047f10b196be0219a33659b28db2dae2e90ce98cde8dc6a9e07c7d0d15703",
-    "S2-01": "57f13f5b0785060c40d02e8254510cfa04d326f2478c94a20cb2b556b7b278ce"
+    "S2-01": "57f13f5b0785060c40d02e8254510cfa04d326f2478c94a20cb2b556b7b278ce",
+    "S1-57": "cb5afba847668a7339a7729866ec0a863e5d440eac594276c1769db11e2951c1"
   },
   "meta": {
     "E1": {
@@ -952,6 +955,17 @@
       "labels": [
         "Entity Resolution",
         "Release 2",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-57": {
+      "title": "Use media profile pages as organization canonical URLs in the synthetic fixtures",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
         "must",
         "task",
         "team: data-ai"

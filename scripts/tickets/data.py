@@ -2274,6 +2274,38 @@ ISSUES = [
             "DE-4 Validation and implementation",
         ],
     ),
+    dict(
+        key="S1-57",
+        epic="E2",
+        iteration=3,
+        kind="code",
+        points=2,
+        title="Use media profile pages as organization canonical URLs in the synthetic fixtures",
+        labels=["task", "Data Connectors", "must", "team: data-ai"],
+        goal="Keep the synthetic fixtures from hiding a domain source that would merge every organization on real data.",
+        context="The fixtures ({S1-31}) set an organization's `profile.canonical_url` to its own website, but a person's to a page on the media site (`https://capitale.example/personnes/<slug>`). In Omerlo the same `Profile` schema serves both, and the Reader API requires `canonical_url` and `canonical_domain` on every person, who has no website of their own, so `canonical_url` is most likely the profile's page on the media site. In the backoffice API `canonical_domain` only exists on the workspace.\n\nIf a mapper ({S1-38}) takes the domain from `canonical_url` or `canonical_domain`, it passes on synthetic data, and on real data every organization of a workspace gets the media's domain, so Tier 1's domain rule ({S1-42}) merges them all. The fixtures should make that mistake fail in tests.",
+        ac=[
+            "An organization's `profile.canonical_url` is its page on the workspace site (for example `https://capitale.example/organisations/<slug>`), built like person URLs",
+            "The organization's own website appears only in `contact[].website`, and its email domain in `contact[].email`",
+            "The `missing_domain` change on duplicate records clears the website and the email only",
+            "Employee email domains come from the employer's `contact[].website`, not its `canonical_url`",
+            "Fixtures still validate against `omerlo_schema.py`, and the same seed still produces byte-identical files",
+            "The wiki page Omerlo API states the meaning of `canonical_url` as an assumption to confirm on staging ({S1-09})",
+        ],
+        tasks=[
+            "Change the organization URL in the generator",
+            "Move the domain sources to the contacts",
+            "Update the tests and the wiki",
+        ],
+        blocked_by=[],
+        blocks=[],
+        extra_blocks="{S1-38} Map Omerlo payloads to normalized source records, {S1-42} Match organizations with Tier 1 deterministic rules",
+        out_of_scope=["Fixture changes unrelated to profile URLs"],
+        rubric=[
+            "Code: Tests",
+            "DE-4 Validation and implementation",
+        ],
+    ),
     # ------------------------------------------------ Entity resolution (Release 2)
     dict(
         key="S2-01",
