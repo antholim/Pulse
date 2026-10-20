@@ -1,7 +1,7 @@
 from synthetic.fixture_loader import generate_fixtures, load_fixtures
 from synthetic.omerlo_fixtures import OmerloFixtureGenerator, Sizes, write_fixtures
 
-SMALL = Sizes(organizations=20, people=30, contents=40, events=4, projects=3, authors=4)
+SMALL = Sizes(organizations=20, people=30, events=4, projects=3, journalists=4)
 
 
 def test_loaded_fixtures_match_what_was_written(tmp_path):
@@ -10,10 +10,10 @@ def test_loaded_fixtures_match_what_was_written(tmp_path):
 
     loaded = load_fixtures(tmp_path)
 
-    assert [t.tenant.media_id for t in loaded] == [t.tenant.media_id for t in generated]
+    assert [t.tenant for t in loaded] == [t.tenant for t in generated]
     for written, read in zip(generated, loaded, strict=True):
         assert read.resources == written.resources
-        assert read.participants == written.participants
+        assert read.metadata == written.metadata
 
 
 def test_ground_truth_is_never_loaded(tmp_path):

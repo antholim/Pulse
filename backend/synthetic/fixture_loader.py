@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 from synthetic.omerlo_fixtures import (
     DEFAULT_SEED,
@@ -10,25 +11,24 @@ from synthetic.omerlo_fixtures import (
     Tenant,
     TenantData,
 )
-from synthetic.omerlo_schema import MODELS
+from synthetic.omerlo_schema import METADATA_FILE, MODELS
 
 
 def load_fixtures(directory: Path) -> list[TenantData]:
     """Read fixtures written by `write_fixtures`. The dev-only ground truth is not loaded."""
-    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     tenants = []
-    for entry in manifest["tenants"]:
-        tenant_dir = directory / entry["media_id"]
-        data = TenantData(Tenant(entry["media_id"], entry["name"], site=""))
-        data.resources = {
-            kind: json.loads((tenant_dir / f"{kind}.json").read_text(encoding="utf-8"))
-            for kind in MODELS
-        }
-        data.participants = json.loads(
-            (tenant_dir / "participants.json").read_text(encoding="utf-8")
-        )
-        tenants.append(data)
+    for entry in read_json(directory / "manifest.json")["tenants"]:
+        tenant_dir = directory / entry["slug"]
+        resources = {kind: read_json(tenant_dir / f"{kind}.json") for kind in MODELS}
+        workspaces = tuple(w["name"] for w in resources["workspaces"])
+        tenant = Tenant(entry["slug"], entry["name"], entry["site"], workspaces)
+        metadata = read_json(tenant_dir / f"{METADATA_FILE}.json")
+        tenants.append(TenantData(tenant, resources, metadata))
     return tenants
+
+
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def generate_fixtures(seed: int = DEFAULT_SEED, sizes: Sizes | None = None) -> list[TenantData]:

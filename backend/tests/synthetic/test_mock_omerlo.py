@@ -1,197 +1,234 @@
 import pytest
 
-from synthetic.mock_omerlo import LIST_PATHS, MAX_LIMIT, TOKEN_PATH, build_app, encode_cursor
+from synthetic.mock_omerlo import (
+    CATEGORIES,
+    COMMUNITY,
+    COMMUNITY_KINDS,
+    MAX_LIMIT,
+    SORT_VALUES,
+    WORKSPACES,
+    api_key_for,
+    build_app,
+    encode_cursor,
+)
 from synthetic.omerlo_fixtures import OmerloFixtureGenerator, write_fixtures
-from tests.synthetic.conftest import SETTINGS, SMALL
+from synthetic.omerlo_schema import MODELS, SUMMARY_MODELS
+from tests.synthetic.conftest import SMALL
 
-ORGS = LIST_PATHS["organizations"]
+
+def list_path(workspace_id, kind):
+    return f"{COMMUNITY}/workspaces/{workspace_id}/{kind}"
 
 
-def fetch_all(client, path, headers, limit=7):
-    items, params = [], {"limit": limit}
+def fetch_all(client, path, headers, limit=7, **params):
+    items, query = [], {"limit": limit, **params}
     while True:
-        body = client.get(path, headers=headers, params=params).json()
+        body = client.get(path, headers=headers, params=query).json()
         items += body["data"]
         if not body["meta"]["next"]:
             return items
-        params = {"limit": limit, "after": body["meta"]["next"]}
+        query = {"limit": limit, **params, "after": body["meta"]["next"]}
 
 
-# ------------------------------------------------------------------ tokens
+@pytest.fixture
+def tenant(mock_tenants):
+    return mock_tenants[0]
 
 
-def test_token_endpoint_issues_bearer_tokens(mock_omerlo):
-    response = mock_omerlo.post(
-        TOKEN_PATH,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": SETTINGS.client_id,
-            "client_secret": SETTINGS.client_secret,
-        },
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["token_type"] == "Bearer"
-    assert body["expires_in"] == SETTINGS.token_ttl_seconds
-    assert body["access_token"]
+@pytest.fixture
+def workspace_id(tenant):
+    return tenant.resources["workspaces"][0]["id"]
 
 
-def test_token_endpoint_accepts_http_basic_credentials(mock_omerlo):
-    response = mock_omerlo.post(
-        TOKEN_PATH,
-        data={"grant_type": "client_credentials"},
-        auth=(SETTINGS.client_id, SETTINGS.client_secret),
-    )
-
-    assert response.status_code == 200
-    assert response.json()["access_token"]
+@pytest.fixture
+def orgs(workspace_id):
+    return list_path(workspace_id, "organizations")
 
 
-@pytest.mark.parametrize(
-    "authorization", ["Basic d3Jvbmc6Y3JlZHM=", "Basic not-base64!", "Bearer abc"]
-)
-def test_bad_basic_credentials_are_refused(mock_omerlo, authorization):
-    response = mock_omerlo.post(
-        TOKEN_PATH,
-        data={"grant_type": "client_credentials"},
-        headers={"Authorization": authorization},
-    )
-
-    assert response.status_code == 401
-
-
-def test_wrong_credentials_are_refused(mock_omerlo):
-    response = mock_omerlo.post(
-        TOKEN_PATH,
-        data={"grant_type": "client_credentials", "client_id": "x", "client_secret": "y"},
-    )
-
-    assert response.status_code == 401
-    assert response.json() == {"error": "invalid_client"}
-
-
-def test_other_grant_types_are_unsupported(mock_omerlo):
-    response = mock_omerlo.post(TOKEN_PATH, data={"grant_type": "refresh_token"})
-
-    assert response.status_code == 400
-    assert response.json() == {"error": "unsupported_grant_type"}
+def in_workspace(tenant, kind, workspace_id):
+    return [r for r in tenant.resources[kind] if r["profile"]["workspace_id"] == workspace_id]
 
 
 # ------------------------------------------------------------------ access
 
 
-def test_requests_without_a_valid_token_get_401(mock_omerlo, headers):
-    no_token = {k: v for k, v in headers.items() if k != "Authorization"}
-    bad_token = {**headers, "Authorization": "Bearer nope"}
+def test_requests_without_a_valid_api_key_get_401(mock_omerlo, orgs):
+    for headers in ({}, {"x-api-key": "nope"}):
+        response = mock_omerlo.get(orgs, headers=headers)
 
-    assert mock_omerlo.get(ORGS, headers=no_token).status_code == 401
-    assert mock_omerlo.get(ORGS, headers=bad_token).status_code == 401
-
-
-def test_expired_tokens_get_401(mock_omerlo, headers, clock):
-    assert mock_omerlo.get(ORGS, headers=headers).status_code == 200
-
-    clock.now += SETTINGS.token_ttl_seconds
-
-    assert mock_omerlo.get(ORGS, headers=headers).status_code == 401
+        assert response.status_code == 401
+        assert response.json() == {"error": "Unauthorized access"}
 
 
-def test_401s_say_which_scheme_is_expected(mock_omerlo, headers, clock):
-    no_token = {k: v for k, v in headers.items() if k != "Authorization"}
-    assert mock_omerlo.get(ORGS, headers=no_token).headers["WWW-Authenticate"] == "Bearer"
+def test_api_key_query_parameter_is_accepted(mock_omerlo, orgs, tenant):
+    response = mock_omerlo.get(orgs, params={"api_key": api_key_for(tenant.tenant.slug)})
 
-    clock.now += SETTINGS.token_ttl_seconds
-    expired = mock_omerlo.get(ORGS, headers=headers)
-    assert expired.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
+    assert response.status_code == 200
 
 
-def test_expired_tokens_are_dropped_when_new_ones_are_issued(mock_omerlo, token, clock):
-    clock.now += SETTINGS.token_ttl_seconds
-    mock_omerlo.post(
-        TOKEN_PATH,
-        data={"grant_type": "client_credentials"},
-        auth=(SETTINGS.client_id, SETTINGS.client_secret),
+def test_each_api_key_sees_only_its_tenant(mock_omerlo, mock_tenants, headers):
+    other = mock_tenants[1]
+    other_headers = {"x-api-key": api_key_for(other.tenant.slug)}
+    other_org = other.resources["organizations"][0]
+
+    first = {w["id"] for w in mock_omerlo.get(WORKSPACES, headers=headers).json()["data"]}
+    second = {w["id"] for w in mock_omerlo.get(WORKSPACES, headers=other_headers).json()["data"]}
+
+    assert first == {w["id"] for w in mock_tenants[0].resources["workspaces"]}
+    assert not first & second
+    detail = f"{COMMUNITY}/organizations/{other_org['id']}"
+    assert mock_omerlo.get(detail, headers=headers).status_code == 404
+    other_workspace = other.resources["workspaces"][0]["id"]
+    workspace_list = list_path(other_workspace, "organizations")
+    assert mock_omerlo.get(workspace_list, headers=headers).status_code == 404
+
+
+# -------------------------------------------------------- composer, core
+
+
+def test_workspaces_list_summaries_and_detail_has_statuses(mock_omerlo, headers, tenant):
+    listed = mock_omerlo.get(WORKSPACES, headers=headers).json()["data"]
+
+    for summary in listed:
+        SUMMARY_MODELS["workspaces"].model_validate(summary)
+    workspace = tenant.resources["workspaces"][0]
+    detail = mock_omerlo.get(f"{WORKSPACES}/{workspace['id']}", headers=headers).json()
+    assert detail["data"] == workspace
+    assert detail["data"]["statuses"]
+
+
+def test_categories_are_listed_in_full_and_readable_by_id(mock_omerlo, headers, tenant):
+    categories = fetch_all(mock_omerlo, CATEGORIES, headers, limit=5)
+
+    assert categories == sorted(
+        tenant.resources["categories"], key=lambda c: (c["inserted_at"], c["id"])
+    )
+    first = categories[0]
+    assert mock_omerlo.get(f"{CATEGORIES}/{first['id']}", headers=headers).json()["data"] == first
+
+
+# --------------------------------------------------------------- community
+
+
+@pytest.mark.parametrize("kind", COMMUNITY_KINDS)
+def test_lists_return_the_workspaces_records_as_summaries(
+    mock_omerlo, headers, tenant, workspace_id, kind
+):
+    items = fetch_all(mock_omerlo, list_path(workspace_id, kind), headers)
+
+    assert {i["id"] for i in items} == {r["id"] for r in in_workspace(tenant, kind, workspace_id)}
+    assert len({i["id"] for i in items}) == len(items)
+    for item in items:
+        SUMMARY_MODELS[kind].model_validate(item)
+
+
+def test_records_in_other_workspaces_are_not_listed(mock_omerlo, headers, tenant):
+    first, second = (w["id"] for w in tenant.resources["workspaces"])
+
+    in_first = {o["id"] for o in fetch_all(mock_omerlo, list_path(first, "organizations"), headers)}
+    in_second = {
+        o["id"] for o in fetch_all(mock_omerlo, list_path(second, "organizations"), headers)
+    }
+
+    assert in_first
+    assert in_second
+    assert not in_first & in_second
+
+
+@pytest.mark.parametrize("sort_by", SORT_VALUES)
+def test_sort_by_orders_every_page(mock_omerlo, headers, orgs, sort_by):
+    items = fetch_all(mock_omerlo, orgs, headers, sort_by=sort_by)
+
+    field, direction = sort_by.rsplit("-", 1)
+    keys = [(i[field], i["id"]) for i in items]
+    assert keys == sorted(keys, reverse=direction == "desc")
+
+
+def test_profile_type_filter(mock_omerlo, headers, tenant, workspace_id, orgs):
+    wanted = in_workspace(tenant, "organizations", workspace_id)[0]["profile"]["profile_type_id"]
+
+    items = fetch_all(mock_omerlo, orgs, headers, **{"profile_type_ids[]": wanted})
+
+    assert items
+    assert all(i["profile"]["profile_type_id"] == wanted for i in items)
+
+
+@pytest.mark.parametrize("kind", COMMUNITY_KINDS)
+def test_detail_returns_the_full_record(mock_omerlo, headers, tenant, kind):
+    record = tenant.resources[kind][0]
+
+    response = mock_omerlo.get(f"{COMMUNITY}/{kind}/{record['id']}", headers=headers)
+
+    assert response.json() == {"data": record}
+    MODELS[kind].model_validate(response.json()["data"])
+
+
+def test_metadata_is_served_apart_from_the_record(mock_omerlo, headers, tenant):
+    with_metadata = next(iter(tenant.metadata))
+    without = next(
+        o["id"] for o in tenant.resources["organizations"] if o["id"] not in tenant.metadata
     )
 
-    assert token not in mock_omerlo.app.state.tokens
-    assert len(mock_omerlo.app.state.tokens) == 1
+    def metadata(record_id):
+        return mock_omerlo.get(f"{COMMUNITY}/organizations/{record_id}/metadata", headers=headers)
+
+    assert metadata(with_metadata).json() == {"data": tenant.metadata[with_metadata]}
+    assert metadata(without).json() == {"data": []}
 
 
-def test_media_id_header_is_required_and_must_exist(mock_omerlo, headers):
-    missing = {k: v for k, v in headers.items() if k != "x-omerlo-media-id"}
+def test_event_sessions(mock_omerlo, headers, tenant):
+    event = tenant.resources["events"][0]
 
-    assert mock_omerlo.get(ORGS, headers=missing).status_code == 400
-    unknown = {**headers, "x-omerlo-media-id": "nobody"}
-    assert mock_omerlo.get(ORGS, headers=unknown).status_code == 404
+    response = mock_omerlo.get(f"{COMMUNITY}/events/{event['id']}/sessions", headers=headers)
+
+    sessions = response.json()["data"]
+    assert sessions
+    assert sessions == [
+        s for s in tenant.resources["event_sessions"] if s["event_id"] == event["id"]
+    ]
 
 
-def test_data_is_scoped_to_the_media_id(mock_omerlo, headers, mock_tenants):
-    first, second = (t.tenant.media_id for t in mock_tenants)
+def test_unknown_id_gets_404_and_malformed_id_gets_400(mock_omerlo, headers):
+    unknown = f"{COMMUNITY}/organizations/00000000-0000-4000-8000-000000000000"
+    malformed = f"{COMMUNITY}/organizations/not-a-uuid"
 
-    ids_first = {o["id"] for o in fetch_all(mock_omerlo, ORGS, headers)}
-    other = {**headers, "x-omerlo-media-id": second}
-    ids_second = {o["id"] for o in fetch_all(mock_omerlo, ORGS, other)}
-
-    assert ids_first == {o["id"] for o in mock_tenants[0].resources["organizations"]}
-    assert ids_second == {o["id"] for o in mock_tenants[1].resources["organizations"]}
-    assert not ids_first & ids_second
-    assert first != second
+    assert mock_omerlo.get(unknown, headers=headers).json() == {"error": "entity not found"}
+    assert mock_omerlo.get(unknown, headers=headers).status_code == 404
+    assert mock_omerlo.get(malformed, headers=headers).json() == {"error": "Invalid uuid sent"}
 
 
 # -------------------------------------------------------------- pagination
 
 
-@pytest.mark.parametrize("kind", list(LIST_PATHS))
-def test_following_next_returns_every_record_once_in_updated_at_order(
-    mock_omerlo, headers, mock_tenants, kind
-):
-    items = fetch_all(mock_omerlo, LIST_PATHS[kind], headers)
+def test_response_has_data_and_meta(mock_omerlo, headers, orgs):
+    body = mock_omerlo.get(orgs, headers=headers, params={"limit": 5}).json()
 
-    assert len(items) == len(mock_tenants[0].resources[kind])
-    assert len({i["id"] for i in items}) == len(items)
-    keys = [(i.get("updated_at") or "", i["id"]) for i in items]
-    assert keys == sorted(keys)
-
-
-def test_response_has_data_assocs_and_meta(mock_omerlo, headers):
-    body = mock_omerlo.get(ORGS, headers=headers, params={"limit": 5}).json()
-
-    assert set(body) == {"data", "assocs", "meta"}
+    assert set(body) == {"data", "meta"}
     assert len(body["data"]) == 5
-    assert body["meta"]["base"] == ORGS
+    assert body["meta"]["base"] == orgs
     assert body["meta"]["next"]
     assert body["meta"]["previous"] is None
 
 
-def test_before_returns_the_previous_page(mock_omerlo, headers):
-    first = mock_omerlo.get(ORGS, headers=headers, params={"limit": 5}).json()
+def test_before_returns_the_previous_page(mock_omerlo, headers, orgs):
+    first = mock_omerlo.get(orgs, headers=headers, params={"limit": 5}).json()
     second = mock_omerlo.get(
-        ORGS, headers=headers, params={"limit": 5, "after": first["meta"]["next"]}
+        orgs, headers=headers, params={"limit": 5, "after": first["meta"]["next"]}
     ).json()
 
     back = mock_omerlo.get(
-        ORGS, headers=headers, params={"limit": 5, "before": second["meta"]["previous"]}
+        orgs, headers=headers, params={"limit": 5, "before": second["meta"]["previous"]}
     ).json()
 
     assert back["data"] == first["data"]
 
 
-def test_last_page_has_no_next(mock_omerlo, headers, mock_tenants):
-    total = len(mock_tenants[0].resources["organizations"])
+def test_last_page_has_no_next(mock_omerlo, headers, tenant, workspace_id, orgs):
+    total = len(in_workspace(tenant, "organizations", workspace_id))
 
-    body = mock_omerlo.get(ORGS, headers=headers, params={"limit": MAX_LIMIT}).json()
+    body = mock_omerlo.get(orgs, headers=headers, params={"limit": MAX_LIMIT}).json()
 
     assert len(body["data"]) == total
-    assert body["meta"]["next"] is None
-
-
-def test_cursor_past_the_end_returns_an_empty_page(mock_omerlo, headers):
-    body = mock_omerlo.get(
-        ORGS, headers=headers, params={"after": encode_cursor(("9999", "z"))}
-    ).json()
-
-    assert body["data"] == []
     assert body["meta"]["next"] is None
 
 
@@ -199,84 +236,23 @@ def test_cursor_past_the_end_returns_an_empty_page(mock_omerlo, headers):
     "params",
     [
         {"after": "not-a-cursor"},
-        {"after": encode_cursor(("a", "b")), "before": encode_cursor(("a", "b"))},
+        {"after": encode_cursor("name-asc", "unknown-id")},
+        {"after": encode_cursor("updated_at-desc", "x")},
+        {"after": encode_cursor("inserted_at-asc", "x"), "before": "y"},
+        {"limit": 0},
+        {"limit": MAX_LIMIT + 1},
+        {"sort_by": "colour-asc"},
     ],
 )
-def test_bad_cursors_get_400(mock_omerlo, headers, params):
-    assert mock_omerlo.get(ORGS, headers=headers, params=params).status_code == 400
+def test_bad_parameters_get_400_with_an_error_body(mock_omerlo, headers, orgs, params):
+    response = mock_omerlo.get(orgs, headers=headers, params=params)
 
-
-@pytest.mark.parametrize("limit", [0, MAX_LIMIT + 1])
-def test_limit_out_of_range_is_rejected(mock_omerlo, headers, limit):
-    assert mock_omerlo.get(ORGS, headers=headers, params={"limit": limit}).status_code == 422
-
-
-def test_content_list_returns_summaries_with_category_assocs(mock_omerlo, headers):
-    body = mock_omerlo.get(LIST_PATHS["contents"], headers=headers, params={"limit": 10}).json()
-
-    assert all("blocks" not in c for c in body["data"])
-    linked = {cid for c in body["data"] for cid in c["category_ids"]}
-    assert {c["id"] for c in body["assocs"]["categories"]} == linked
-
-
-# ------------------------------------------------------- detail and nested
-
-
-def test_content_detail_includes_the_profiles_block(mock_omerlo, headers, mock_tenants):
-    content = next(
-        c
-        for c in mock_tenants[0].resources["contents"]
-        if any(b["kind"] == "profiles" for b in c["blocks"])
-    )
-
-    response = mock_omerlo.get(f"{LIST_PATHS['contents']}/{content['id']}", headers=headers)
-
-    assert response.status_code == 200
-    assert response.json() == {"data": content}
-
-
-@pytest.mark.parametrize("kind", list(LIST_PATHS))
-def test_every_resource_can_be_read_by_id(mock_omerlo, headers, mock_tenants, kind):
-    record = mock_tenants[0].resources[kind][0]
-
-    response = mock_omerlo.get(f"{LIST_PATHS[kind]}/{record['id']}", headers=headers)
-
-    assert response.json()["data"] == record
-
-
-def test_unknown_or_other_tenant_id_gets_404(mock_omerlo, headers, mock_tenants):
-    other_tenant_org = mock_tenants[1].resources["organizations"][0]["id"]
-
-    assert mock_omerlo.get(f"{ORGS}/unknown", headers=headers).status_code == 404
-    assert mock_omerlo.get(f"{ORGS}/{other_tenant_org}", headers=headers).status_code == 404
-
-
-def test_detail_requires_a_token(mock_omerlo, headers, mock_tenants):
-    org = mock_tenants[0].resources["organizations"][0]["id"]
-    no_token = {k: v for k, v in headers.items() if k != "Authorization"}
-
-    assert mock_omerlo.get(f"{ORGS}/{org}", headers=no_token).status_code == 401
-
-
-def test_event_participants_are_paginated_people(mock_omerlo, headers, mock_tenants):
-    tenant = mock_tenants[0]
-    event_id = max(tenant.participants, key=lambda e: len(tenant.participants[e]))
-    path = f"{LIST_PATHS['events']}/{event_id}/participants/people"
-
-    people = fetch_all(mock_omerlo, path, headers, limit=3)
-
-    assert {p["id"] for p in people} == set(tenant.participants[event_id])
-    assert all("first_name" in p for p in people)
-
-
-def test_unknown_event_participants_get_404(mock_omerlo, headers):
-    path = f"{LIST_PATHS['events']}/unknown/participants/people"
-
-    assert mock_omerlo.get(path, headers=headers).status_code == 404
+    assert response.status_code == 400
+    assert response.json()["error"]
 
 
 def test_ground_truth_is_not_served(mock_omerlo, headers):
-    for path in ("/api/media/v1/ground_truth", "/ground_truth.dev_only.json"):
+    for path in ("/api/ground_truth", "/ground_truth.dev_only.json"):
         assert mock_omerlo.get(path, headers=headers).status_code == 404
 
 
@@ -286,10 +262,13 @@ def test_ground_truth_is_not_served(mock_omerlo, headers):
 def test_cli_serves_fixture_files(tmp_path):
     write_fixtures(OmerloFixtureGenerator(5, SMALL).generate(), tmp_path, 5)
 
-    app, args = build_app(["--fixtures", str(tmp_path), "--port", "9000", "--client-id", "me"])
+    app, args = build_app(["--fixtures", str(tmp_path), "--port", "9000"])
 
     assert args.port == 9000
-    assert any(getattr(route, "path", None) == ORGS for route in app.routes)
+    assert app.state.api_keys == {
+        "mock-demo-capitale": "demo-capitale",
+        "mock-demo-estrie": "demo-estrie",
+    }
 
 
 def test_cli_rejects_both_seed_and_fixtures(tmp_path):

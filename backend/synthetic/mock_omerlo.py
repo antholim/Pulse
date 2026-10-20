@@ -1,11 +1,14 @@
-"""A mock of the Omerlo Reader API that serves synthetic fixtures.
+"""A mock of the Omerlo backoffice API that serves synthetic fixtures.
 
-It behaves like the Reader API where PULSE's connector depends on it: an OAuth 2
-client credentials token endpoint, `Authorization: Bearer` and
-`x-omerlo-media-id` on every request, data scoped to the media id, cursor
-pagination (`before`, `after`, `limit`) ordered by `updated_at`, and
-`{"data", "assocs", "meta"}` responses. Paths mirror the ones the connector
-assumes until staging confirms them (#23).
+It behaves like the backoffice API where PULSE's connector depends on it (wiki
+page "Omerlo API"): an `x-api-key` header (or `api_key` query parameter) that
+identifies the tenant, community lists scoped by workspace that return summaries
+and sort with `sort_by`, detail endpoints with the full record, metadata served
+apart from the record, `{"data", "meta"}` responses with `meta.next` to follow,
+and `{"error": message}` bodies on errors.
+
+How the real API paginates is undocumented (#23). The mock answers `meta.next`
+with an opaque cursor that is sent back as `after`, and takes `limit` everywhere.
 
     uv run python -m synthetic.mock_omerlo                       # seed 490, port 8100
     uv run python -m synthetic.mock_omerlo --fixtures synthetic/out
@@ -15,238 +18,254 @@ import argparse
 import base64
 import binascii
 import json
-import secrets
-import time
-from bisect import bisect_left, bisect_right
-from collections.abc import Callable
-from dataclasses import dataclass
+import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from synthetic.fixture_loader import generate_fixtures, load_fixtures
 from synthetic.omerlo_fixtures import DEFAULT_SEED, TenantData
+from synthetic.omerlo_schema import summarize
 
-TOKEN_PATH = "/oauth/token"
-API = "/api/media/v1"
-LIST_PATHS = {
-    "categories": f"{API}/categories",
-    "profile_types": f"{API}/profile_types",
-    "organizations": f"{API}/community/organizations",
-    "people": f"{API}/community/people",
-    "projects": f"{API}/community/projects",
-    "events": f"{API}/community/events",
-    "contents": f"{API}/contents",
-}
+API = "/api"
+WORKSPACES = f"{API}/composer/v2/workspaces"
+CATEGORIES = f"{API}/core/v2/categories"
+COMMUNITY = f"{API}/community/v2"
+# Community kinds as they appear in paths; fixture files use the same names.
+COMMUNITY_KINDS = ("organizations", "people", "projects", "events")
+SORT_FIELDS = ("name", "inserted_at", "updated_at")
+SORT_VALUES = tuple(f"{f}-{d}" for f in SORT_FIELDS for d in ("asc", "desc"))
+DEFAULT_SORT = "inserted_at-asc"
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
 
 
-@dataclass(frozen=True)
-class MockSettings:
-    client_id: str = "mock-client"
-    client_secret: str = "mock-secret"
-    token_ttl_seconds: int = 3600
+def api_key_for(slug: str) -> str:
+    """The mock's API key for a tenant, e.g. `mock-demo-capitale`."""
+    return f"mock-{slug}"
 
 
-SortKey = tuple[str, str]
-
-
-def sort_key(item: dict[str, Any]) -> SortKey:
-    # Categories and profile types have no updated_at; they sort by id.
-    return (item.get("updated_at") or "", item["id"])
-
-
-def encode_cursor(key: SortKey) -> str:
-    return base64.urlsafe_b64encode(json.dumps(list(key)).encode()).decode()
-
-
-def decode_cursor(cursor: str) -> SortKey:
+def check_uuid(value: str) -> None:
     try:
-        key = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        uuid.UUID(value)
+    except ValueError:
+        raise HTTPException(400, "Invalid uuid sent") from None
+
+
+def sort_value(record: dict[str, Any], field: str) -> str:
+    if field != "name":
+        return record[field]
+    if "name" in record:
+        return record["name"]
+    if "last_name" in record:
+        return f"{record['last_name']} {record['first_name']}"
+    return record["locales"][0]["name"] if record.get("locales") else ""
+
+
+def encode_cursor(sort_by: str, record_id: str) -> str:
+    return base64.urlsafe_b64encode(json.dumps([sort_by, record_id]).encode()).decode()
+
+
+def decode_cursor(cursor: str, sort_by: str) -> str:
+    """The id of the record the cursor points at."""
+    try:
+        value = json.loads(base64.urlsafe_b64decode(cursor.encode()))
     except (binascii.Error, ValueError):
         raise HTTPException(400, "Invalid cursor") from None
-    if not (isinstance(key, list) and len(key) == 2 and all(isinstance(k, str) for k in key)):
+    if not (isinstance(value, list) and len(value) == 2 and value[0] == sort_by):
         raise HTTPException(400, "Invalid cursor")
-    return key[0], key[1]
+    return value[1]
 
 
 def paginate(
-    items: list[dict[str, Any]], before: str | None, after: str | None, limit: int, base: str
+    records: list[dict[str, Any]],
+    *,
+    sort_by: str,
+    before: str | None,
+    after: str | None,
+    limit: int,
+    base: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """One page of `items` ordered by `updated_at`.
+    """One page of `records` in `sort_by` order (ties broken by id).
 
     `meta.next` passed as `after` gives the following page; `meta.previous` passed
     as `before` gives the preceding one.
     """
     if before and after:
         raise HTTPException(400, "Use either before or after, not both")
-    ordered = sorted(items, key=sort_key)
-    keys = [sort_key(i) for i in ordered]
+    field, direction = sort_by.rsplit("-", 1)
+    ordered = sorted(records, key=lambda r: (sort_value(r, field), r["id"]))
+    if direction == "desc":
+        ordered.reverse()
+    position = {r["id"]: i for i, r in enumerate(ordered)}
+
+    def index_of(cursor: str) -> int:
+        record_id = decode_cursor(cursor, sort_by)
+        if record_id not in position:
+            raise HTTPException(400, "Invalid cursor")
+        return position[record_id]
+
     if after:
-        start = bisect_right(keys, decode_cursor(after))
+        start = index_of(after) + 1
         stop = min(start + limit, len(ordered))
     elif before:
-        stop = bisect_left(keys, decode_cursor(before))
+        stop = index_of(before)
         start = max(0, stop - limit)
     else:
         start, stop = 0, min(limit, len(ordered))
     window = ordered[start:stop]
     meta = {
         "base": base,
-        "next": encode_cursor(keys[stop - 1]) if window and stop < len(ordered) else None,
-        "previous": encode_cursor(keys[start]) if window and start > 0 else None,
+        "next": encode_cursor(sort_by, window[-1]["id"])
+        if window and stop < len(ordered)
+        else None,
+        "previous": encode_cursor(sort_by, window[0]["id"]) if window and start > 0 else None,
     }
     return window, meta
 
 
-def basic_credentials(request: Request) -> tuple[str | None, str | None]:
-    """Client id and secret from an `Authorization: Basic` header, or (None, None)."""
-    scheme, _, encoded = request.headers.get("authorization", "").partition(" ")
-    if scheme.lower() != "basic":
-        return None, None
-    try:
-        decoded = base64.b64decode(encoded, validate=True).decode()
-    except (binascii.Error, UnicodeDecodeError):
-        return None, None
-    client_id, separator, client_secret = decoded.partition(":")
-    return (client_id, client_secret) if separator else (None, None)
+Limit = Annotated[int, Query(ge=1, le=MAX_LIMIT)]
 
 
-def create_app(
-    tenants: list[TenantData],
-    settings: MockSettings | None = None,
-    clock: Callable[[], float] = time.monotonic,
-) -> FastAPI:
-    settings = settings or MockSettings()
-    by_media_id = {t.tenant.media_id: t for t in tenants}
-    tokens: dict[str, float] = {}  # access token -> expiry
-    app = FastAPI(title="Mock Omerlo Reader API", description="Serves synthetic data only.")
-    app.state.tokens = tokens
+def create_app(tenants: list[TenantData]) -> FastAPI:
+    by_key = {api_key_for(t.tenant.slug): t for t in tenants}
+    app = FastAPI(title="Mock Omerlo backoffice API", description="Serves synthetic data only.")
+    app.state.api_keys = {key: t.tenant.slug for key, t in by_key.items()}
 
-    @app.post(TOKEN_PATH)
-    def issue_token(
-        request: Request,
-        grant_type: Annotated[str, Form()],
-        client_id: Annotated[str | None, Form()] = None,
-        client_secret: Annotated[str | None, Form()] = None,
-    ):
-        if grant_type != "client_credentials":
-            return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
-        if client_id is None and client_secret is None:
-            # RFC 6749 section 2.3.1: clients may authenticate with HTTP Basic instead.
-            client_id, client_secret = basic_credentials(request)
-        valid = secrets.compare_digest(client_id or "", settings.client_id) and (
-            secrets.compare_digest(client_secret or "", settings.client_secret)
-        )
-        if not valid:
-            return JSONResponse({"error": "invalid_client"}, status_code=401)
-        now = clock()
-        for expired in [t for t, expiry in tokens.items() if expiry <= now]:
-            del tokens[expired]
-        access_token = secrets.token_urlsafe(24)
-        tokens[access_token] = now + settings.token_ttl_seconds
-        return {
-            "access_token": access_token,
-            "token_type": "Bearer",
-            "expires_in": settings.token_ttl_seconds,
-        }
+    @app.exception_handler(StarletteHTTPException)
+    def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+        return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+        fields = ", ".join(".".join(map(str, e["loc"][1:])) for e in exc.errors())
+        return JSONResponse({"error": f"Invalid parameters: {fields}"}, status_code=400)
 
     def current_tenant(request: Request) -> TenantData:
-        # RFC 6750 section 3: say which scheme is expected, and why a token was refused.
-        scheme, _, token = request.headers.get("authorization", "").partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            raise HTTPException(401, "Missing bearer token", headers={"WWW-Authenticate": "Bearer"})
-        if tokens.get(token, 0) <= clock():
-            raise HTTPException(
-                401,
-                "Invalid or expired bearer token",
-                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
-            )
-        media_id = request.headers.get("x-omerlo-media-id")
-        if not media_id:
-            raise HTTPException(400, "The x-omerlo-media-id header is required")
-        if media_id not in by_media_id:
-            raise HTTPException(404, f"Unknown media {media_id!r}")
-        return by_media_id[media_id]
+        key = request.headers.get("x-api-key") or request.query_params.get("api_key")
+        if not key or key not in by_key:
+            raise HTTPException(401, "Unauthorized access")
+        return by_key[key]
 
-    def list_route(kind: str, path: str):
-        def list_items(
-            tenant: Annotated[TenantData, Depends(current_tenant)],
-            before: str | None = None,
-            after: str | None = None,
-            limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-        ):
-            records = tenant.resources[kind]
-            window, meta = paginate(records, before, after, limit, path)
-            assocs: dict[str, Any] = {}
-            if kind == "contents":
-                # The list endpoint returns summaries; blocks come with the detail.
-                window = [{k: v for k, v in c.items() if k != "blocks"} for c in window]
-                wanted = {cid for c in window for cid in c["category_ids"]}
-                categories = tenant.resources["categories"]
-                assocs["categories"] = [c for c in categories if c["id"] in wanted]
-            return {"data": window, "assocs": assocs, "meta": meta}
+    Tenant = Annotated[TenantData, Depends(current_tenant)]
 
-        app.get(path, name=f"list_{kind}")(list_items)
+    def find(tenant: TenantData, kind: str, record_id: str) -> dict[str, Any]:
+        check_uuid(record_id)
+        for record in tenant.resources[kind]:
+            if record["id"] == record_id:
+                return record
+        raise HTTPException(404, "entity not found")
 
-    def detail_route(kind: str, path: str):
-        def get_item(item_id: str, tenant: Annotated[TenantData, Depends(current_tenant)]):
-            # Contents come back in full here, including the Profiles block.
-            for record in tenant.resources[kind]:
-                if record["id"] == item_id:
-                    return {"data": record}
-            raise HTTPException(404, f"Not found: {item_id!r}")
+    # ------------------------------------------------------- composer, core
 
-        app.get(f"{path}/{{item_id}}", name=f"get_{kind}")(get_item)
-
-    for kind, path in LIST_PATHS.items():
-        list_route(kind, path)
-        detail_route(kind, path)
-
-    participants_path = f"{API}/community/events/{{event_id}}/participants/people"
-
-    @app.get(participants_path)
-    def event_participants(
-        event_id: str,
-        tenant: Annotated[TenantData, Depends(current_tenant)],
+    @app.get(WORKSPACES)
+    def list_workspaces(
+        tenant: Tenant,
         before: str | None = None,
         after: str | None = None,
-        limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+        limit: Limit = DEFAULT_LIMIT,
     ):
-        if event_id not in tenant.participants:
-            raise HTTPException(404, f"No event {event_id!r}")
-        people_by_id = {p["id"]: p for p in tenant.resources["people"]}
-        people = [people_by_id[pid] for pid in tenant.participants[event_id]]
-        base = participants_path.format(event_id=event_id)
-        window, meta = paginate(people, before, after, limit, base)
-        return {"data": window, "assocs": {}, "meta": meta}
+        records = tenant.resources["workspaces"]
+        window, meta = paginate(
+            records, sort_by=DEFAULT_SORT, before=before, after=after, limit=limit, base=WORKSPACES
+        )
+        return {"data": [summarize("workspaces", w) for w in window], "meta": meta}
+
+    @app.get(f"{WORKSPACES}/{{workspace_id}}")
+    def get_workspace(workspace_id: str, tenant: Tenant):
+        return {"data": find(tenant, "workspaces", workspace_id)}
+
+    @app.get(CATEGORIES)
+    def list_categories(
+        tenant: Tenant,
+        before: str | None = None,
+        after: str | None = None,
+        limit: Limit = DEFAULT_LIMIT,
+    ):
+        records = tenant.resources["categories"]
+        window, meta = paginate(
+            records, sort_by=DEFAULT_SORT, before=before, after=after, limit=limit, base=CATEGORIES
+        )
+        return {"data": window, "meta": meta}
+
+    @app.get(f"{CATEGORIES}/{{category_id}}")
+    def get_category(category_id: str, tenant: Tenant):
+        return {"data": find(tenant, "categories", category_id)}
+
+    # ------------------------------------------------------------ community
+
+    def community_routes(kind: str) -> None:
+        list_path = f"{COMMUNITY}/workspaces/{{workspace_id}}/{kind}"
+        detail_path = f"{COMMUNITY}/{kind}/{{record_id}}"
+
+        def list_records(
+            workspace_id: str,
+            tenant: Tenant,
+            sort_by: Annotated[str, Query(pattern="|".join(SORT_VALUES))] = DEFAULT_SORT,
+            profile_type_ids: Annotated[list[str] | None, Query(alias="profile_type_ids[]")] = None,
+            before: str | None = None,
+            after: str | None = None,
+            limit: Limit = DEFAULT_LIMIT,
+        ):
+            find(tenant, "workspaces", workspace_id)
+            records = [
+                r
+                for r in tenant.resources[kind]
+                if r["profile"]["workspace_id"] == workspace_id
+                and (not profile_type_ids or r["profile"]["profile_type_id"] in profile_type_ids)
+            ]
+            base = list_path.format(workspace_id=workspace_id)
+            window, meta = paginate(
+                records, sort_by=sort_by, before=before, after=after, limit=limit, base=base
+            )
+            return {"data": [summarize(kind, r) for r in window], "meta": meta}
+
+        def get_record(record_id: str, tenant: Tenant):
+            return {"data": find(tenant, kind, record_id)}
+
+        def get_metadata(record_id: str, tenant: Tenant):
+            find(tenant, kind, record_id)
+            return {"data": tenant.metadata.get(record_id, [])}
+
+        app.get(list_path, name=f"list_{kind}")(list_records)
+        app.get(detail_path, name=f"get_{kind}")(get_record)
+        app.get(f"{detail_path}/metadata", name=f"get_{kind}_metadata")(get_metadata)
+
+    for kind in COMMUNITY_KINDS:
+        community_routes(kind)
+
+    @app.get(f"{COMMUNITY}/events/{{event_id}}/sessions")
+    def event_sessions(event_id: str, tenant: Tenant):
+        find(tenant, "events", event_id)
+        sessions = [s for s in tenant.resources["event_sessions"] if s["event_id"] == event_id]
+        return {"data": sessions}
 
     return app
 
 
 def build_app(argv: list[str] | None = None) -> tuple[FastAPI, argparse.Namespace]:
-    parser = argparse.ArgumentParser(description="Mock Omerlo Reader API (synthetic data)")
+    parser = argparse.ArgumentParser(description="Mock Omerlo backoffice API (synthetic data)")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--seed", type=int, default=DEFAULT_SEED, help="generate in memory")
     source.add_argument("--fixtures", type=Path, help="serve files written by the generator")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8100)
-    parser.add_argument("--client-id", default=MockSettings.client_id)
-    parser.add_argument("--client-secret", default=MockSettings.client_secret)
     args = parser.parse_args(argv)
 
     tenants = load_fixtures(args.fixtures) if args.fixtures else generate_fixtures(args.seed)
-    settings = MockSettings(client_id=args.client_id, client_secret=args.client_secret)
-    return create_app(tenants, settings), args
+    return create_app(tenants), args
 
 
 def main(argv: list[str] | None = None) -> None:
     import uvicorn
 
     app, args = build_app(argv)
+    for key, slug in app.state.api_keys.items():
+        print(f"Tenant {slug}: x-api-key {key}")
     uvicorn.run(app, host=args.host, port=args.port)
 
 
