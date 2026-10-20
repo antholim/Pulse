@@ -1,37 +1,54 @@
-# Weekly dependency update PRs (#22). Minor and patch updates are grouped into one PR per
-# ecosystem so they stay easy to review; major updates get their own PR.
+# Monthly dependency update PRs (#22): at most one grouped PR per ecosystem.
+#
+# Major upgrades are team decisions, so Dependabot does not propose them for the backend,
+# frontend or Docker images. The runtimes are pinned on purpose (Python 3.12 in
+# backend/pyproject.toml, Node 22 in .nvmrc), and for Docker tags a Python 3.12 to 3.13 bump
+# counts as a minor update, so images only get patch updates. Security alerts are separate
+# and are not affected by this schedule.
 version: 2
 
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     labels: ["dependencies", "team: infra-security"]
     groups:
       github-actions:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
   - package-ecosystem: uv
     directory: /backend
     schedule:
-      interval: weekly
+      interval: monthly
     labels: ["dependencies", "team: infra-security"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       backend:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
+      interval: monthly
     labels: ["dependencies", "team: infra-security"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       frontend:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directories: [/backend, /frontend, /discord-bots/team-bot]
     schedule:
-      interval: weekly
+      interval: monthly
     labels: ["dependencies", "team: infra-security"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      docker:
+        patterns: ["*"]
