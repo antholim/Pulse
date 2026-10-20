@@ -45,6 +45,18 @@ To run only PostgreSQL while developing the frontend and backend locally:
 docker compose up db
 ```
 
+## Logging and errors
+
+The backend writes one JSON object per line to stdout, with `timestamp`, `level`, `module`, `event` and a `request_id` (API requests) or `run_id` (syncs and imports). Set the level with `LOG_LEVEL` (`DEBUG`, `INFO`, `WARN`, `ERROR`; default `INFO`). Emails, phone numbers and secrets are masked.
+
+Every API response carries an `X-Request-ID` header, and every error response has the same body:
+
+```json
+{"error": {"code": "not_found", "message": "Organization 7 not found", "details": null, "request_id": "5a52f95c..."}}
+```
+
+The frontend logs through `src/services/logger.ts` (`VITE_LOG_LEVEL`, default `debug` in development and `warn` in builds); ESLint rejects direct `console` calls. See the wiki page [Logging & Error Handling](https://github.com/antholim/Pulse/wiki/Logging-&-Error-Handling).
+
 ## Code style
 
 | Area                    | Linter | Formatter | Config                                  |
