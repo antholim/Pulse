@@ -70,6 +70,13 @@ jobs:
       - run: uv sync --locked
       # Fails below the coverage minimum in pyproject.toml.
       - run: uv run pytest --cov
+      # Shows the coverage table on the run summary, linked from the PR checks.
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          [ -f .coverage ] || exit 0
+          printf "### Backend coverage\n\n" >> "$GITHUB_STEP_SUMMARY"
+          uv run coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
 
   frontend-build:
     name: Frontend build
@@ -87,6 +94,18 @@ jobs:
       - run: npm ci
       # Fails below the coverage thresholds in vite.config.ts.
       - run: npm run coverage
+      # Shows the coverage table on the run summary, linked from the PR checks.
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          [ -f coverage/coverage-summary.json ] || exit 0
+          node -e '
+            const total = require("./coverage/coverage-summary.json").total;
+            const rows = ["statements", "branches", "functions", "lines"].map(
+              (k) => `| ${k} | ${total[k].covered} / ${total[k].total} | ${total[k].pct}% |`,
+            );
+            console.log(["### Frontend coverage", "", "| Metric | Covered | Cover |", "| --- | ---: | ---: |", ...rows].join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
 
   docker-build:
