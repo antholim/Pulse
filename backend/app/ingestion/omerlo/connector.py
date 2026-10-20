@@ -4,6 +4,10 @@ Incremental strategy until #23 confirms whether an "updated since" filter
 exists: every page is read and records are kept when their `updated_at` is
 after the watermark. This is correct but reads everything; #23 decides how to
 narrow the requests.
+
+Deletions are not reported yet (follow-up ticket from the #71 review): a content
+that disappears before its detail is read is skipped, and only a full sync can
+tell that a record is gone, by its id no longer appearing.
 """
 
 import logging
@@ -49,6 +53,7 @@ class OmerloConnector:
         page_size: int = DEFAULT_PAGE_SIZE,
         entity_kinds: Sequence[str] = ENTITY_KINDS,
         content_details: bool = True,
+        event_participants: bool = True,
     ):
         unknown = set(entity_kinds) - set(ENDPOINTS)
         if unknown:
@@ -57,6 +62,7 @@ class OmerloConnector:
         self._page_size = page_size
         self._entity_kinds = entity_kinds
         self._content_details = content_details
+        self._event_participants = event_participants
 
     def fetch_since(self, watermark: datetime | None) -> Iterator[RawRecord]:
         for kind in self._entity_kinds:
@@ -69,9 +75,10 @@ class OmerloConnector:
                         record = self._content_detail(record)
                     if record is not None:
                         yield record
-                if kind == "event":
+                if kind == "event" and self._event_participants:
                     # Participation has no timestamp of its own and may change without
-                    # the event's updated_at moving, so it is read on every sync.
+                    # the event's updated_at moving, so it is read on every sync: one
+                    # extra request per event. Turn it off to save requests.
                     yield from self._participants(record.external_id)
 
     def _content_detail(self, summary: RawRecord) -> RawRecord | None:
@@ -89,6 +96,12 @@ class OmerloConnector:
         return to_record("content", detail) or summary
 
     def _participants(self, event_id: str) -> Iterator[RawRecord]:
+        """The event's current participants.
+
+        Each event's participants are a complete replacement set: someone removed from
+        the event simply stops appearing, so the sync run must compare against the
+        previous set to record the removal.
+        """
         path = EVENT_PARTICIPANTS.format(id=event_id)
         for person in paginate(self._client, path, page_size=self._page_size):
             person_id = person.get("id")
