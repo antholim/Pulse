@@ -37,7 +37,8 @@ def test_database_health_when_unavailable(mocker):
     response = client.get("/health/db")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Database unavailable"}
+    assert response.json()["error"]["code"] == "service_unavailable"
+    assert response.json()["error"]["message"] == "Database unavailable"
 
 
 def test_database_health_when_not_configured(mocker):
@@ -49,7 +50,8 @@ def test_database_health_when_not_configured(mocker):
     response = client.get("/health/db")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Database unavailable"}
+    assert response.json()["error"]["code"] == "service_unavailable"
+    assert response.json()["error"]["message"] == "Database unavailable"
 
 
 def test_database_health_without_database_url(monkeypatch):
