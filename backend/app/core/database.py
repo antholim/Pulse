@@ -11,13 +11,17 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT_DIR / ".env")
 
 
+class DatabaseNotConfiguredError(RuntimeError):
+    """DATABASE_URL is missing, so no connection can be made."""
+
+
 # Created on first use, so importing the app (for example in tests) does not
 # require DATABASE_URL.
 @cache
 def get_engine() -> Engine:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
-        raise RuntimeError("DATABASE_URL is not set; see .env.example")
+        raise DatabaseNotConfiguredError("DATABASE_URL is not set; see .env.example")
     return create_engine(database_url, pool_pre_ping=True)
 
 

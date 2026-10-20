@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 
+from app.core import database
+from app.core.database import DatabaseNotConfiguredError
 from app.main import app
 
 client = TestClient(app)
@@ -36,3 +38,26 @@ def test_database_health_when_unavailable(mocker):
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Database unavailable"}
+
+
+def test_database_health_when_not_configured(mocker):
+    mocker.patch(
+        "app.main.check_database",
+        side_effect=DatabaseNotConfiguredError("DATABASE_URL is not set"),
+    )
+
+    response = client.get("/health/db")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database unavailable"}
+
+
+def test_database_health_without_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database.get_engine.cache_clear()
+    try:
+        response = client.get("/health/db")
+    finally:
+        database.get_engine.cache_clear()
+
+    assert response.status_code == 503
