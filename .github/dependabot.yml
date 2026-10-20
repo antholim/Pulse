@@ -1,10 +1,3 @@
-# Monthly dependency update PRs (#22): at most one grouped PR per ecosystem.
-#
-# Major upgrades are team decisions, so Dependabot does not propose them for the backend,
-# frontend or Docker images. The runtimes are pinned on purpose (Python 3.12 in
-# backend/pyproject.toml, Node 22 in .nvmrc), and for Docker tags a Python 3.12 to 3.13 bump
-# counts as a minor update, so images only get patch updates. Security alerts are separate
-# and are not affected by this schedule.
 version: 2
 
 updates:
