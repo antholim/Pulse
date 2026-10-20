@@ -1,37 +1,47 @@
-# Weekly dependency update PRs (#22). Minor and patch updates are grouped into one PR per
-# ecosystem so they stay easy to review; major updates get their own PR.
 version: 2
 
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-    labels: ["dependencies", "team: infra-security"]
+      interval: monthly
+    labels: ["team: infra-security"]
     groups:
       github-actions:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
   - package-ecosystem: uv
     directory: /backend
     schedule:
-      interval: weekly
-    labels: ["dependencies", "team: infra-security"]
+      interval: monthly
+    labels: ["team: infra-security"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       backend:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-    labels: ["dependencies", "team: infra-security"]
+      interval: monthly
+    labels: ["team: infra-security"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       frontend:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directories: [/backend, /frontend, /discord-bots/team-bot]
     schedule:
-      interval: weekly
-    labels: ["dependencies", "team: infra-security"]
+      interval: monthly
+    labels: ["team: infra-security"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      docker:
+        patterns: ["*"]
