@@ -1,7 +1,3 @@
-# Legal forms stripped from the end of organization names during normalization (#26).
-# Entries may include punctuation and accents; the loader folds them the same way
-# as organization names before matching. Keep French and English forms here only.
-
 suffixes = [
   "inc",
   "inc.",
