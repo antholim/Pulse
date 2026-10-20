@@ -67,7 +67,9 @@ docker compose --profile mock up mock-omerlo          # or: --profile full for t
 cd backend && uv run python -m synthetic.mock_omerlo  # --fixtures synthetic/out to serve files
 ```
 
-Point the connector at it with:
+When the whole stack runs in Docker (`--profile full`), the `backend` service already points at the mock (`http://mock-omerlo:8100`) unless `.env` sets `OMERLO_*`. Leave them unset in `.env`, or set them to staging: `localhost` inside the backend container is the backend itself, not the mock.
+
+For a backend or script running outside Docker, point the connector at it with:
 
 ```
 OMERLO_BASE_URL=http://localhost:8100
