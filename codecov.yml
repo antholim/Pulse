@@ -1,0 +1,60 @@
+# Codecov settings: https://docs.codecov.com/docs/codecov-yaml
+# Validate changes with: curl --data-binary @codecov.yml https://codecov.io/validate
+
+codecov:
+  # Report even when another CI job (lint, Docker) fails; wait for both uploads instead.
+  require_ci_to_pass: false
+  notify:
+    # One upload from Backend tests and one from Frontend build (.github/workflows/ci.yml).
+    after_n_builds: 2
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...80"
+  status:
+    # codecov/patch: lines added or changed in the PR must be at least 70 percent covered.
+    patch:
+      default:
+        target: 70%
+        threshold: 0%
+        # Pass when main has no report yet to compare against (the first PRs).
+        if_not_found: success
+    # codecov/project: shown on the PR but never blocks it. The totals are already enforced
+    # by fail_under in backend/pyproject.toml and the thresholds in frontend/vite.config.ts.
+    project:
+      default:
+        informational: true
+
+fixes:
+  # Vitest writes lcov paths relative to frontend/ (src/App.tsx). Backend paths in
+  # coverage.xml are absolute and resolve without a fix.
+  - "src/::frontend/src/"
+
+comment:
+  # "Patch coverage is X% with N lines in your changes missing coverage" plus the
+  # "Files with missing lines" table.
+  layout: "condensed_header, condensed_files, condensed_footer"
+  hide_project_coverage: true
+  behavior: default
+  require_changes: false
+  after_n_builds: 2
+
+flags:
+  backend:
+    paths:
+      - backend/
+    carryforward: true
+  frontend:
+    paths:
+      - frontend/
+    carryforward: true
+
+ignore:
+  - "backend/tests/**"
+  - "backend/migrations/**"
+  - "frontend/src/**/*.test.ts"
+  - "frontend/src/**/*.test.tsx"
+  - "frontend/src/test/**"
+  - "discord-bots/**"
+  - "scripts/**"

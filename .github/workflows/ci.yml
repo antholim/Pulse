@@ -69,7 +69,8 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --locked
       # Fails below the coverage minimum in pyproject.toml.
-      - run: uv run pytest --cov
+      # coverage.xml is the report uploaded to Codecov below.
+      - run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
       # Shows the coverage table on the run summary, linked from the PR checks.
       - name: Coverage summary
         if: ${{ !cancelled() }}
@@ -77,6 +78,17 @@ jobs:
           [ -f .coverage ] || exit 0
           printf "### Backend coverage\n\n" >> "$GITHUB_STEP_SUMMARY"
           uv run coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
+      # Sends the report to Codecov, which comments the patch coverage on the PR.
+      # Runs even when the coverage minimum fails, so the PR still gets the report.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: backend/coverage.xml
+          disable_search: true
+          flags: backend
+          name: backend
 
   frontend-build:
     name: Frontend build
@@ -106,6 +118,17 @@ jobs:
             );
             console.log(["### Frontend coverage", "", "| Metric | Covered | Cover |", "| --- | ---: | ---: |", ...rows].join("\n"));
           ' >> "$GITHUB_STEP_SUMMARY"
+      # Sends the report to Codecov, which comments the patch coverage on the PR.
+      # Runs even when the coverage thresholds fail, so the PR still gets the report.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/coverage/lcov.info
+          disable_search: true
+          flags: frontend
+          name: frontend
       - run: npm run build
 
   docker-build:
