@@ -1,4 +1,6 @@
+import pytest
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
 from app.core.errors import (
@@ -7,15 +9,18 @@ from app.core.errors import (
     DataValidationError,
     NotFoundError,
     PulseError,
+    UnhandledErrorMiddleware,
     register_exception_handlers,
 )
 from app.core.request_context import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.core.security import cors_origins
 from app.main import app
 
 
 def make_client() -> TestClient:
     small_app = FastAPI()
     register_exception_handlers(small_app)
+    small_app.add_middleware(UnhandledErrorMiddleware)
     small_app.add_middleware(RequestContextMiddleware)
 
     @small_app.get("/organizations/{org_id}")
@@ -38,8 +43,15 @@ def make_client() -> TestClient:
     def crash():
         raise RuntimeError("database exploded while emailing marie@exemple.qc.ca")
 
-    # Unhandled errors are re-raised by Starlette after the 500 response is sent.
-    return TestClient(small_app, raise_server_exceptions=False)
+    @small_app.get("/crash-mid-stream")
+    def crash_mid_stream():
+        def chunks():
+            yield b"partial"
+            raise RuntimeError("stream broke")
+
+        return StreamingResponse(chunks())
+
+    return TestClient(small_app)
 
 
 def test_not_found_error_uses_the_standard_body():
@@ -72,6 +84,12 @@ def test_connector_error_is_a_502_naming_the_source():
     assert response.json()["error"]["details"] == {"source": "omerlo"}
 
 
+def test_connector_error_source_wins_over_a_source_in_details():
+    error = ConnectorError("Bad page", source="omerlo", details={"source": "csv", "page": 2})
+
+    assert error.details == {"source": "omerlo", "page": 2}
+
+
 def test_base_pulse_error_is_an_internal_error():
     response = make_client().get("/pulse-error")
 
@@ -100,6 +118,11 @@ def test_unexpected_errors_are_logged_with_trace_and_request_id(log_output):
     assert entry["level"] == "error"
     assert entry["request_id"] == response.headers[REQUEST_ID_HEADER]
     assert "RuntimeError: database exploded while emailing [EMAIL]" in entry["exception"]
+
+
+def test_errors_after_the_response_started_are_reraised():
+    with pytest.raises(RuntimeError, match="stream broke"):
+        make_client().get("/crash-mid-stream")
 
 
 def test_server_side_pulse_errors_log_at_error_and_client_errors_at_warning(log_output):
@@ -139,3 +162,31 @@ def test_the_real_app_uses_the_standard_error_body():
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+@pytest.fixture
+def crashing_route():
+    original_routes = list(app.router.routes)
+
+    def crash():
+        raise RuntimeError("database exploded")
+
+    app.add_api_route("/test-crash", crash)
+    yield "/test-crash"
+    app.router.routes[:] = original_routes
+
+
+def test_real_app_crashes_keep_cors_security_and_request_id_headers(crashing_route, log_output):
+    origin = cors_origins()[0]
+    response = TestClient(app).get(crashing_route, headers={"Origin": origin})
+
+    assert response.status_code == 500
+    assert response.headers["access-control-allow-origin"] == origin
+    assert response.headers["x-content-type-options"] == "nosniff"
+    body = response.json()["error"]
+    assert body["code"] == "internal_error"
+    assert body["message"] == INTERNAL_ERROR_MESSAGE
+    assert body["request_id"] == response.headers[REQUEST_ID_HEADER]
+    [entry] = [e for e in log_output() if e["event"] == "unhandled_error"]
+    assert entry["level"] == "error"
+    assert "RuntimeError: database exploded" in entry["exception"]

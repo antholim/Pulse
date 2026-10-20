@@ -30,10 +30,10 @@ export function createLogger(minLevel: LogLevel): Logger {
         return;
       }
       console[level](`[PULSE] ${message}`, {
+        ...context,
         timestamp: new Date().toISOString(),
         level,
         message,
-        ...context,
       });
     };
 

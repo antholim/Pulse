@@ -106,6 +106,7 @@ def configure_logging(level: str | None = None, stream: TextIO | None = None) ->
 
     handler = logging.StreamHandler(stream or sys.stdout)
     handler.set_name(_HANDLER_NAME)
+    handler.setLevel(level)
     handler.setFormatter(
         structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=shared_processors,

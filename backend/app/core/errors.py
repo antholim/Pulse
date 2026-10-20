@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.logging import get_logger
 from app.core.request_context import REQUEST_ID_HEADER, current_request_id
@@ -55,7 +56,7 @@ class ConnectorError(PulseError):
     code = "connector_error"
 
     def __init__(self, message: str, *, source: str, details: dict[str, Any] | None = None) -> None:
-        super().__init__(message, details={"source": source, **(details or {})})
+        super().__init__(message, details={**(details or {}), "source": source})
         self.source = source
 
 
@@ -85,6 +86,8 @@ async def handle_pulse_error(_request: Request, exc: PulseError) -> JSONResponse
 
 
 async def handle_http_exception(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    if exc.status_code >= 500:
+        logger.error("http_error", status_code=exc.status_code, exc_info=exc)
     return error_response(
         exc.status_code,
         HTTP_ERROR_CODES.get(exc.status_code, "http_error"),
@@ -106,8 +109,45 @@ async def handle_request_validation_error(
 
 
 async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("unhandled_error", method=request.method, path=request.url.path, exc_info=exc)
+    _log_unhandled_error(request.method, request.url.path, exc)
     return error_response(500, "internal_error", INTERNAL_ERROR_MESSAGE)
+
+
+def _log_unhandled_error(method: str, path: str, exc: Exception) -> None:
+    logger.error("unhandled_error", method=method, path=path, exc_info=exc)
+
+
+class UnhandledErrorMiddleware:
+    """Turns unexpected errors into the standard 500 inside the CORS and header middleware.
+
+    Starlette's own 500 handler runs outside every middleware, so its responses would lack
+    CORS and security headers and browsers would block them.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        response_started = False
+
+        async def send_tracking_start(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_tracking_start)
+        except Exception as exc:
+            if response_started:
+                raise
+            _log_unhandled_error(scope["method"], scope["path"], exc)
+            response = error_response(500, "internal_error", INTERNAL_ERROR_MESSAGE)
+            await response(scope, receive, send_tracking_start)
 
 
 def register_exception_handlers(app: FastAPI) -> None:

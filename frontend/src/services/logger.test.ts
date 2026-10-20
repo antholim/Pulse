@@ -38,6 +38,17 @@ describe("createLogger", () => {
     );
   });
 
+  it("does not let the context overwrite the level or message", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    createLogger("debug").warn("real", { level: "info", message: "x" });
+
+    expect(warn).toHaveBeenCalledWith(
+      "[PULSE] real",
+      expect.objectContaining({ level: "warn", message: "real" }),
+    );
+  });
+
   it("drops entries below the minimum level", () => {
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
     const error = vi.spyOn(console, "error").mockImplementation(() => {});

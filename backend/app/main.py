@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import DatabaseNotConfiguredError, check_database
-from app.core.errors import register_exception_handlers
+from app.core.errors import UnhandledErrorMiddleware, register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.request_context import RequestContextMiddleware
 from app.core.security import SecurityHeadersMiddleware, cors_origins
@@ -30,6 +30,8 @@ app = FastAPI(
 )
 register_exception_handlers(app)
 
+# Added first so it is the innermost middleware and its 500s still get CORS and security headers.
+app.add_middleware(UnhandledErrorMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),

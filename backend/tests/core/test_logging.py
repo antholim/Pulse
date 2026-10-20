@@ -75,6 +75,21 @@ def test_uvicorn_logs_join_the_json_output_and_noisy_loggers_are_quiet():
     assert events == ["Started server process"]
 
 
+@pytest.mark.usefixtures("log_output")
+def test_the_configured_level_also_applies_to_uvicorn_logs():
+    stream = io.StringIO()
+    configure_logging(level="ERROR", stream=stream)
+    # uvicorn sets its loggers to INFO itself, which overrides the root level.
+    uvicorn_logger = logging.getLogger("uvicorn.error")
+    uvicorn_logger.setLevel(logging.INFO)
+    try:
+        uvicorn_logger.info("Started server process")
+    finally:
+        uvicorn_logger.setLevel(logging.NOTSET)
+
+    assert stream.getvalue() == ""
+
+
 def test_logged_output_is_masked(log_output):
     get_logger("app.example").warning(
         "import_row_rejected", email="marie@exemple.qc.ca", reason="bad phone 514-555-0199"
