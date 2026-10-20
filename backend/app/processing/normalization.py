@@ -85,14 +85,78 @@ def legal_suffixes() -> frozenset[str]:
     return _load_legal_suffixes()
 
 
+@lru_cache(maxsize=1)
+def _max_suffix_token_count() -> int:
+    """Longest legal suffix in whitespace-separated tokens (for end matching)."""
+    longest = 1
+    for form in _load_legal_suffixes():
+        if " " in form:
+            longest = max(longest, len(form.split()))
+    return longest
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
+def _tokenize_name(value: str) -> list[str]:
+    """Fold, lowercase, strip punctuation, collapse connectors into tokens."""
+    folded = _fold_accents(value).lower()
+    # Keep "&" visible as a token before non-alnum is wiped.
+    folded = folded.replace("&", f" {CONNECTOR_TOKEN} ")
+    spaced = _collapse_whitespace(_NON_ALNUM.sub(" ", folded))
+    if not spaced:
+        return []
+    tokens: list[str] = []
+    for token in spaced.split(" "):
+        if token in CONNECTOR_ALIASES:
+            tokens.append(CONNECTOR_TOKEN)
+        else:
+            tokens.append(token)
+    return tokens
+
+
+def _strip_trailing_legal_suffixes(tokens: list[str]) -> list[str]:
+    """Remove trailing legal forms until none remain at the end."""
+    suffixes = _load_legal_suffixes()
+    max_k = min(len(tokens), _max_suffix_token_count())
+    while tokens:
+        stripped = False
+        for k in range(min(len(tokens), max_k), 0, -1):
+            candidate = " ".join(tokens[-k:])
+            compact = "".join(tokens[-k:])
+            if candidate in suffixes or compact in suffixes:
+                tokens = tokens[:-k]
+                stripped = True
+                break
+        if not stripped:
+            break
+    return tokens
+
+
 def normalize_organization_name(value: str | None) -> str | None:
     """Return a comparison key for an organization name, or None if unusable."""
-    return None
+    raw = _blank_to_none(value)
+    if raw is None:
+        return None
+    tokens = _strip_trailing_legal_suffixes(_tokenize_name(raw))
+    if not tokens:
+        return None
+    return " ".join(tokens)
 
 
 def normalize_person_name(value: str | None) -> str | None:
     """Return a comparison key for a person full name, or None if unusable."""
-    return None
+    raw = _blank_to_none(value)
+    if raw is None:
+        return None
+    # Hyphens become spaces so Marie-Ève and Marie Eve share a key.
+    folded = _fold_accents(raw).lower().replace("-", " ")
+    spaced = _collapse_whitespace(_NON_ALNUM.sub(" ", folded))
+    return spaced or None
 
 
 def normalize_domain(value: str | None) -> str | None:

@@ -1,4 +1,4 @@
-"""Tests for the normalization skeleton and shared helpers (#26)."""
+"""Tests for identifier normalization (#26)."""
 
 import pytest
 
@@ -68,21 +68,92 @@ def test_legal_suffixes_loader_is_cached():
 
 
 @pytest.mark.parametrize(
-    ("function", "args", "expected"),
+    ("raw", "expected"),
     [
-        (normalize_organization_name, (None,), None),
-        (normalize_organization_name, ("Groupe Exemple ltée",), None),
-        (normalize_person_name, (None,), None),
-        (normalize_person_name, ("Marie-Ève Tremblay",), None),
-        (normalize_domain, (None,), None),
-        (normalize_domain, ("https://www.exemple.qc.ca",), None),
-        (normalize_linkedin, (None,), None),
-        (normalize_email, (None,), None),
-        (email_domain, (None,), None),
+        (None, None),
+        ("", None),
+        ("   ", None),
+        ("Inc.", None),
+        ("ltée", None),
+        ("Groupe Exemple ltée", "groupe exemple"),
+        ("GROUPE EXEMPLE", "groupe exemple"),
+        ("Groupe Exemple Inc.", "groupe exemple"),
+        ("Groupe Exemple Inc. Ltd", "groupe exemple"),
+        ("Québec Numerique", "quebec numerique"),
+        ("Lévesque & Cloutier Avocats", "levesque and cloutier avocats"),
+        ("Lévesque et Cloutier Avocats", "levesque and cloutier avocats"),
+        ("Groupe St-Pierre", "groupe st pierre"),
+        ("Groupe St Pierre", "groupe st pierre"),
+        ("Acme Technologies s.e.n.c.", "acme technologies"),
+        ("Acme Technologies senc", "acme technologies"),
+        ("Foo Coopérative", "foo"),
+        ("Transport Gosselin enr.", "transport gosselin"),
     ],
 )
-def test_public_normalizer_stubs_return_none(function, args, expected):
-    assert function(*args) == expected
+def test_normalize_organization_name(raw, expected):
+    assert normalize_organization_name(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("Groupe Exemple ltée", "Groupe Exemple Inc."),
+        ("Groupe Exemple ltée", "GROUPE EXEMPLE"),
+        ("Groupe Exemple limitée", "Groupe Exemple ltee"),
+        ("Lévesque & Cloutier Avocats", "Lévesque et Cloutier Avocats"),
+        ("Groupe St-Pierre", "Groupe St Pierre"),
+        ("Coopérative de Rimouski", "Cooperative de Rimouski"),
+        ("TRANSPORT GOSSELIN INC.", "Transport Gosselin"),
+    ],
+)
+def test_organization_variants_share_a_key(left, right):
+    """Synthetic-style duplicate changes should collapse to one comparison key."""
+    assert normalize_organization_name(left) == normalize_organization_name(right)
+    assert normalize_organization_name(left) is not None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("   ", None),
+        ("Marie-Ève Tremblay", "marie eve tremblay"),
+        ("Marie Eve Tremblay", "marie eve tremblay"),
+        ("MARIE-EVE TREMBLAY", "marie eve tremblay"),
+        ("Émilie Gosselin", "emilie gosselin"),
+        ("Jean-Philippe  St-Pierre", "jean philippe st pierre"),
+    ],
+)
+def test_normalize_person_name(raw, expected):
+    assert normalize_person_name(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("Marie-Ève Tremblay", "Marie Eve Tremblay"),
+        ("Émilie Gosselin", "Emilie Gosselin"),
+        ("Jean-Philippe St-Pierre", "Jean Philippe St Pierre"),
+    ],
+)
+def test_person_variants_share_a_key(left, right):
+    assert normalize_person_name(left) == normalize_person_name(right)
+    assert normalize_person_name(left) is not None
+
+
+@pytest.mark.parametrize(
+    ("function", "args"),
+    [
+        (normalize_domain, (None,)),
+        (normalize_domain, ("https://www.exemple.qc.ca",)),
+        (normalize_linkedin, (None,)),
+        (normalize_email, (None,)),
+        (email_domain, (None,)),
+    ],
+)
+def test_remaining_normalizer_stubs_return_none(function, args):
+    assert function(*args) is None
 
 
 def test_phone_stub_returns_empty_result():
