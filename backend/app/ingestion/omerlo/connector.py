@@ -1,46 +1,50 @@
-"""Omerlo Reader API connector: fetches every resource PULSE needs as raw records.
+"""Omerlo backoffice API connector: fetches every resource PULSE needs as raw records.
 
-Incremental strategy until #23 confirms whether an "updated since" filter
-exists: every page is read and records are kept when their `updated_at` is
-after the watermark. This is correct but reads everything; #23 decides how to
-narrow the requests.
+Community records (organizations, people, projects, events) are listed per
+workspace. Lists return summaries only, so each changed record costs a detail
+request, plus one for its metadata and, for events, one for its sessions.
 
-Deletions are not reported yet (follow-up ticket from the #71 review): a content
-that disappears before its detail is read is skipped, and only a full sync can
-tell that a record is gone, by its id no longer appearing.
+The API can sort by `updated_at` but has no "updated since" filter. An incremental
+sync therefore lists newest first and stops at the first record older than the
+watermark; deleted records never appear in a list, so only the sync run's periodic
+full sync can detect them (#55).
 """
 
 import logging
 from collections.abc import Iterator, Sequence
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
 import httpx
 
 from app.ingestion.connector import RawRecord, is_after, parse_timestamp
-from app.ingestion.omerlo.pagination import DEFAULT_PAGE_SIZE, paginate, read_json
+from app.ingestion.omerlo.client import OmerloAPIError, OmerloNotFoundError, get_json
+from app.ingestion.omerlo.pagination import DEFAULT_PAGE_SIZE, paginate
 
 logger = logging.getLogger(__name__)
 
-API = "/api/media/v1"
+WORKSPACES = "/composer/v2/workspaces"
+WORKSPACE_DETAIL = "/composer/v2/workspaces/{id}"
+CATEGORIES = "/core/v2/categories"
+COMMUNITY_LIST = "/community/v2/workspaces/{workspace_id}/{path}"
+COMMUNITY_DETAIL = "/community/v2/{path}/{id}"
+COMMUNITY_METADATA = "/community/v2/{path}/{id}/metadata"
+EVENT_SESSIONS = "/community/v2/events/{id}/sessions"
 
-# List endpoint per entity kind. Only the contents path and the event participants
-# path are confirmed by the public docs; the others follow the documented pattern
-# and must be verified on staging (#23).
-ENDPOINTS = {
-    "category": f"{API}/categories",
-    "profile_type": f"{API}/profile_types",
-    "organization": f"{API}/community/organizations",
-    "person": f"{API}/community/people",
-    "project": f"{API}/community/projects",
-    "event": f"{API}/community/events",
-    "content": f"{API}/contents",  # verified
+# Community entity kind -> its path segment.
+COMMUNITY = {
+    "organization": "organizations",
+    "person": "people",
+    "project": "projects",
+    "event": "events",
 }
-CONTENT_DETAIL = f"{API}/contents/{{id}}"
-EVENT_PARTICIPANTS = f"{API}/community/events/{{id}}/participants/people"  # verified
+# Lists whose documentation includes `limit`; the others get no page size.
+SIZED_LISTS = {"workspace", "category", "event"}
+NEWEST_FIRST = {"sort_by": "updated_at-desc"}
 
 # Fetch order: reference data first, so later stages can resolve ids.
-ENTITY_KINDS = tuple(ENDPOINTS)
+ENTITY_KINDS = ("workspace", "category", *COMMUNITY)
 
 
 class OmerloConnector:
@@ -50,71 +54,129 @@ class OmerloConnector:
         self,
         client: httpx.Client,
         *,
-        page_size: int = DEFAULT_PAGE_SIZE,
+        workspace_ids: Sequence[str] | None = None,
         entity_kinds: Sequence[str] = ENTITY_KINDS,
-        content_details: bool = True,
-        event_participants: bool = True,
+        page_size: int = DEFAULT_PAGE_SIZE,
+        metadata: bool = True,
+        event_sessions: bool = True,
     ):
-        unknown = set(entity_kinds) - set(ENDPOINTS)
+        """`workspace_ids` limits the sync to those workspaces; by default, every
+        workspace the API key can see is synced."""
+        unknown = set(entity_kinds) - set(ENTITY_KINDS)
         if unknown:
             raise ValueError(f"Unknown Omerlo entity kinds: {sorted(unknown)}")
         self._client = client
-        self._page_size = page_size
+        self._workspace_ids = workspace_ids
         self._entity_kinds = entity_kinds
-        self._content_details = content_details
-        self._event_participants = event_participants
+        self._page_size = page_size
+        self._metadata = metadata
+        self._event_sessions = event_sessions
 
     def fetch_since(self, watermark: datetime | None) -> Iterator[RawRecord]:
-        for kind in self._entity_kinds:
-            for item in paginate(self._client, ENDPOINTS[kind], page_size=self._page_size):
-                record = to_record(kind, item)
-                if record is None:
-                    continue
-                if is_after(record, watermark):
-                    if kind == "content" and self._content_details:
-                        record = self._content_detail(record)
-                    if record is not None:
-                        yield record
-                if kind == "event" and self._event_participants:
-                    # Participation has no timestamp of its own and may change without
-                    # the event's updated_at moving, so it is read on every sync: one
-                    # extra request per event. Turn it off to save requests.
-                    yield from self._participants(record.external_id)
+        workspaces = self._workspaces()
+        if "workspace" in self._entity_kinds:
+            for summary in workspaces:
+                record = to_record("workspace", summary)
+                if record and is_after(record, watermark):
+                    yield self._workspace_detail(record)
+        if "category" in self._entity_kinds:
+            for item in self._list("category", CATEGORIES):
+                record = to_record("category", item)
+                if record and is_after(record, watermark):
+                    yield record
+        for kind in (k for k in COMMUNITY if k in self._entity_kinds):
+            for workspace in workspaces:
+                yield from self._community(kind, workspace["id"], watermark)
 
-    def _content_detail(self, summary: RawRecord) -> RawRecord | None:
-        """The full content, including the Profiles block linking organizations and people."""
-        path = CONTENT_DETAIL.format(id=summary.external_id)
-        response = self._client.get(path)
-        if response.status_code == httpx.codes.NOT_FOUND:
-            logger.warning("Omerlo content %s disappeared before its detail was read", path)
-            return None
-        response.raise_for_status()
-        detail = read_json(response, path).get("data")
-        if not isinstance(detail, dict):
-            logger.warning("Omerlo content %s has no detail object; keeping the summary", path)
-            return summary
-        return to_record("content", detail) or summary
+    def _list(self, kind: str, path: str, **params: str) -> Iterator[dict[str, Any]]:
+        page_size = self._page_size if kind in SIZED_LISTS else None
+        return paginate(self._client, path, page_size=page_size, params=params)
 
-    def _participants(self, event_id: str) -> Iterator[RawRecord]:
-        """The event's current participants.
+    def _workspaces(self) -> list[dict[str, Any]]:
+        workspaces = [w for w in self._list("workspace", WORKSPACES) if w.get("id")]
+        if self._workspace_ids is None:
+            return workspaces
+        visible = {w["id"] for w in workspaces}
+        missing = set(self._workspace_ids) - visible
+        if missing:
+            raise OmerloAPIError(f"Workspaces not visible to this API key: {sorted(missing)}")
+        return [w for w in workspaces if w["id"] in self._workspace_ids]
 
-        Each event's participants are a complete replacement set: someone removed from
-        the event simply stops appearing, so the sync run must compare against the
-        previous set to record the removal.
-        """
-        path = EVENT_PARTICIPANTS.format(id=event_id)
-        for person in paginate(self._client, path, page_size=self._page_size):
-            person_id = person.get("id")
-            if person_id is None:
-                logger.warning("Skipping an Omerlo participant without an id in %s", path)
+    def _workspace_detail(self, summary: RawRecord) -> RawRecord:
+        """The workspace with its statuses, which say whether a record is published."""
+        body = get_json(self._client, WORKSPACE_DETAIL.format(id=summary.external_id))
+        return detail_record("workspace", body) or summary
+
+    def _community(
+        self, kind: str, workspace_id: str, watermark: datetime | None
+    ) -> Iterator[RawRecord]:
+        path = COMMUNITY_LIST.format(workspace_id=workspace_id, path=COMMUNITY[kind])
+        for summary in self._list(kind, path, **NEWEST_FIRST):
+            record = to_record(kind, summary)
+            if record is None:
                 continue
-            yield RawRecord(
-                entity_kind="event_participant",
-                external_id=f"{event_id}:{person_id}",
-                updated_at=None,
-                payload=person,
-                parent_external_id=event_id,
-            )
+            if not is_after(record, watermark):
+                break  # newest first: every remaining record is older still
+            detail = self._detail(kind, record.external_id)
+            if detail is None:
+                continue
+            yield detail
+            if self._metadata:
+                yield from self._record_metadata(kind, record.external_id)
+            if kind == "event" and self._event_sessions:
+                yield from self._sessions(record.external_id)
+
+    def _detail(self, kind: str, record_id: str) -> RawRecord | None:
+        path = COMMUNITY_DETAIL.format(path=COMMUNITY[kind], id=record_id)
+        try:
+            body = get_json(self._client, path)
+        except OmerloNotFoundError:
+            logger.warning("Omerlo %s %s disappeared before its detail was read", kind, record_id)
+            return None
+        record = detail_record(kind, body)
+        if record is None:
+            raise OmerloAPIError(f"{path}: response has no data object")
+        return record
+
+    def _record_metadata(self, kind: str, record_id: str) -> Iterator[RawRecord]:
+        """The record's metadata entries, as one raw record holding the whole response."""
+        path = COMMUNITY_METADATA.format(path=COMMUNITY[kind], id=record_id)
+        try:
+            body = get_json(self._client, path)
+        except OmerloNotFoundError:
+            logger.warning("Omerlo %s %s disappeared before its metadata was read", kind, record_id)
+            return
+        yield RawRecord(
+            entity_kind=f"{kind}_metadata",
+            external_id=record_id,
+            updated_at=None,
+            payload=body,
+            parent_external_id=record_id,
+        )
+
+    def _sessions(self, event_id: str) -> Iterator[RawRecord]:
+        """The event's current sessions.
+
+        They are a complete replacement set: a session removed from the event simply
+        stops appearing, so the sync run must compare against the previous set.
+        """
+        path = EVENT_SESSIONS.format(id=event_id)
+        try:
+            sessions = get_json(self._client, path).get("data")
+        except OmerloNotFoundError:
+            logger.warning("Omerlo event %s disappeared before its sessions were read", event_id)
+            return
+        if not isinstance(sessions, list):
+            raise OmerloAPIError(f"{path}: response has no data list")
+        for session in sessions:
+            record = to_record("event_session", session)
+            if record is not None:
+                yield replace(record, parent_external_id=event_id)
+
+
+def detail_record(kind: str, body: dict[str, Any]) -> RawRecord | None:
+    data = body.get("data")
+    return to_record(kind, data) if isinstance(data, dict) else None
 
 
 def to_record(kind: str, item: dict[str, Any]) -> RawRecord | None:

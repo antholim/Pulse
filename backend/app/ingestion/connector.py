@@ -19,7 +19,7 @@ class RawRecord:
     external_id: str
     updated_at: datetime | None
     payload: dict[str, Any]
-    # Set when the record only exists under another one, e.g. an event's participant.
+    # Set when the record only exists under another one, e.g. an event's session.
     parent_external_id: str | None = None
 
 

@@ -2,16 +2,17 @@ import httpx
 import pytest
 import respx
 
-from app.ingestion.omerlo.pagination import OmerloAPIError, paginate
+from app.ingestion.omerlo.client import OmerloAPIError
+from app.ingestion.omerlo.pagination import paginate
 
-BASE_URL = "https://omerlo.test"
-PATH = "/api/media/v1/contents"
+BASE_URL = "https://omerlo.test/api"
+PATH = "/core/v2/categories"
 URL = BASE_URL + PATH
 
 
-def page(items, next_cursor=None):
+def page(items, next_page=None):
     return httpx.Response(
-        200, json={"data": items, "assocs": {}, "meta": {"next": next_cursor, "previous": None}}
+        200, json={"data": items, "meta": {"base": PATH, "next": next_page, "previous": None}}
     )
 
 
@@ -36,19 +37,45 @@ def test_follows_next_cursor_until_the_last_page(client):
 
 
 @respx.mock
-def test_extra_params_are_kept_on_every_page(client):
-    route = respx.get(URL).mock(side_effect=[page([{"id": "1"}], "c2"), page([], None)])
+def test_limit_is_left_out_when_no_page_size_is_given(client):
+    route = respx.get(URL).mock(return_value=page([{"id": "1"}]))
 
-    list(paginate(client, PATH, params={"locale": "fr"}))
+    list(paginate(client, PATH, params={"sort_by": "updated_at-desc"}))
 
-    assert all(c.request.url.params["locale"] == "fr" for c in route.calls)
+    assert dict(route.calls.last.request.url.params) == {"sort_by": "updated_at-desc"}
 
 
 @respx.mock
-def test_empty_first_page_yields_nothing(client):
-    respx.get(URL).mock(return_value=page([], "ignored"))
+def test_extra_params_are_kept_on_every_page(client):
+    route = respx.get(URL).mock(side_effect=[page([{"id": "1"}], "c2"), page([], None)])
 
-    assert list(paginate(client, PATH)) == []
+    list(paginate(client, PATH, params={"sort_by": "updated_at-desc"}))
+
+    assert all(c.request.url.params["sort_by"] == "updated_at-desc" for c in route.calls)
+
+
+@respx.mock
+def test_absolute_next_url_on_the_same_host_is_followed_as_is(client):
+    next_url = f"{URL}?page=2"
+    respx.get(URL, params={"page": "2"}).mock(return_value=page([{"id": "2"}]))
+    respx.get(URL).mock(return_value=page([{"id": "1"}], next_url))
+
+    assert [i["id"] for i in paginate(client, PATH)] == ["1", "2"]
+
+
+@respx.mock
+def test_next_url_on_another_host_is_refused(client):
+    respx.get(URL).mock(return_value=page([{"id": "1"}], "https://elsewhere.test/steal"))
+
+    with pytest.raises(OmerloAPIError, match="another host"):
+        list(paginate(client, PATH))
+
+
+@respx.mock
+def test_response_without_meta_is_a_single_page(client):
+    respx.get(URL).mock(return_value=httpx.Response(200, json={"data": [{"id": "1"}]}))
+
+    assert len(list(paginate(client, PATH))) == 1
 
 
 @respx.mock
@@ -68,24 +95,8 @@ def test_repeated_cursor_raises_instead_of_looping(client):
 
 
 @respx.mock
-def test_http_error_is_raised(client):
-    respx.get(URL).mock(return_value=httpx.Response(503))
+def test_response_without_a_data_list_raises(client):
+    respx.get(URL).mock(return_value=httpx.Response(200, json={"meta": {}}))
 
-    with pytest.raises(httpx.HTTPStatusError):
-        list(paginate(client, PATH))
-
-
-@respx.mock
-@pytest.mark.parametrize(
-    "response",
-    [
-        httpx.Response(200, text="<html>oops</html>"),
-        httpx.Response(200, json=["not", "an", "object"]),
-        httpx.Response(200, json={"meta": {}}),
-    ],
-)
-def test_malformed_response_raises(client, response):
-    respx.get(URL).mock(return_value=response)
-
-    with pytest.raises(OmerloAPIError):
+    with pytest.raises(OmerloAPIError, match="no data list"):
         list(paginate(client, PATH))
