@@ -166,9 +166,7 @@ def normalize_organization_name(value: str | None) -> str | None:
     raw = _blank_to_none(value)
     if raw is None:
         return None
-    tokens = _strip_trailing_connectors(
-        _strip_trailing_legal_suffixes(_tokenize_name(raw))
-    )
+    tokens = _strip_trailing_connectors(_strip_trailing_legal_suffixes(_tokenize_name(raw)))
     if not tokens:
         return None
     return " ".join(tokens)
