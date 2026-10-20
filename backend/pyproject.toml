@@ -56,6 +56,7 @@ dependencies = [
     "shellingham==1.5.4",
     "sqlalchemy>=2.1.5",
     "starlette==1.8.0",
+    "structlog>=26.1.0",
     "typer==0.27.3",
     "typing-extensions==4.16.0",
     "typing-inspection==0.4.4",
@@ -86,7 +87,11 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+# Command-line output for whoever runs the generator, not application logging.
+"synthetic/omerlo_fixtures.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
