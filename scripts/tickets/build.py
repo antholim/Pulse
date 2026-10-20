@@ -6,11 +6,12 @@
                               bodies, titles, milestones and labels, link
                               issues to their parent epics
     --overwrite S1-09,S1-10   also apply data.py's title and milestone to these
-                              keys when they were changed on GitHub by hand
+                              keys when GitHub shows a different value
 
-See README.md for details.
+See README.md for details, or run with --help.
 """
 
+import argparse
 import hashlib
 import json
 import re
@@ -564,14 +565,28 @@ def apply(overwrite=()):
     print("Done.")
 
 
-def parse_overwrite(argv):
-    keys = []
-    for i, arg in enumerate(argv):
-        if arg == "--overwrite" and i + 1 < len(argv):
-            keys += argv[i + 1].split(",")
-    return tuple(k.strip() for k in keys if k.strip())
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Render, create and update the PULSE GitHub tickets defined in data.py. "
+        "Without --apply, only a dry run: nothing changes on GitHub."
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="create labels and missing issues, update bodies, titles, milestones and labels",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="extend",
+        default=[],
+        metavar="KEYS",
+        type=lambda value: [k.strip() for k in value.split(",") if k.strip()],
+        help="comma-separated keys (e.g. S1-09,S1-10) whose title and milestone data.py "
+        "should set even when GitHub shows a different value; may be repeated",
+    )
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    keys = parse_overwrite(sys.argv)
-    apply(keys) if "--apply" in sys.argv else dry_run(keys)
+    args = parse_args()
+    (apply if args.apply else dry_run)(tuple(args.overwrite))
