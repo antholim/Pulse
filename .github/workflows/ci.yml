@@ -56,6 +56,8 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://pulse:pulse@localhost:5432/pulse_test
+      # Turns on the integration tests (backend/tests/integration) against the service above.
+      TEST_DATABASE_URL: postgresql+psycopg://pulse:pulse@localhost:5432/pulse_test
     defaults:
       run:
         working-directory: backend
