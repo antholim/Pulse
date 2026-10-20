@@ -1,4 +1,4 @@
-"""Small GitHub REST client: milestones and open pull requests.
+"""Small GitHub client: milestones, open pull requests and what review routing needs.
 
 Responses are mapped from raw JSON into our own dataclasses, so the rest of the
 bot (and the tests) never depend on githubkit's models.
@@ -28,6 +28,16 @@ class PullRequest:
     draft: bool
     created_at: datetime
     requested_reviewers: tuple[str, ...]
+    labels: tuple[str, ...] = ()
+    updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ReviewContext:
+    """What review routing needs beyond the PR itself."""
+
+    issue_labels: tuple[str, ...]  # labels of the issues the PR closes ("Closes #12")
+    reopened_at: datetime | None  # when the PR was last reopened, if ever
 
 
 class GitHubReader(Protocol):
@@ -36,6 +46,28 @@ class GitHubReader(Protocol):
     async def milestones(self) -> list[Milestone]: ...
 
     async def open_pull_requests(self) -> list[PullRequest]: ...
+
+    # Review routing (#76)
+
+    async def review_context(self, number: int) -> ReviewContext: ...
+
+    async def request_reviewers(self, number: int, logins: list[str]) -> None: ...
+
+
+REVIEW_CONTEXT_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      closingIssuesReferences(first: 20) {
+        nodes { labels(first: 50) { nodes { name } } }
+      }
+      timelineItems(last: 1, itemTypes: [REOPENED_EVENT]) {
+        nodes { ... on ReopenedEvent { createdAt } }
+      }
+    }
+  }
+}
+"""
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -67,6 +99,8 @@ def pull_request_from_json(data: dict[str, Any]) -> PullRequest:
         draft=bool(data.get("draft")),
         created_at=created,
         requested_reviewers=tuple(reviewers),
+        labels=tuple(label["name"] for label in data.get("labels") or []),
+        updated_at=_parse_datetime(data.get("updated_at")),
     )
 
 
@@ -102,3 +136,25 @@ class GitHubService:
             self._owner, self._repo, state="open", per_page=100
         )
         return [pull_request_from_json(item) for item in response.json()]
+
+    async def review_context(self, number: int) -> ReviewContext:
+        """Labels of the issues this PR closes, and when it was last reopened (one query)."""
+        data = await self._client.async_graphql(
+            REVIEW_CONTEXT_QUERY,
+            {"owner": self._owner, "repo": self._repo, "number": number},
+        )
+        pull = (data.get("repository") or {}).get("pullRequest") or {}
+        issues = (pull.get("closingIssuesReferences") or {}).get("nodes") or []
+        reopens = (pull.get("timelineItems") or {}).get("nodes") or []
+        return ReviewContext(
+            issue_labels=tuple(
+                label["name"] for issue in issues for label in issue["labels"]["nodes"]
+            ),
+            reopened_at=_parse_datetime(reopens[-1].get("createdAt")) if reopens else None,
+        )
+
+    async def request_reviewers(self, number: int, logins: list[str]) -> None:
+        """Needs a token with Pull requests: write."""
+        await self._client.rest.pulls.async_request_reviewers(
+            self._owner, self._repo, number, reviewers=logins
+        )

@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
 
 from team_bot.domain.iterations import Iteration, Milestone, ReleaseWindow
 from team_bot.domain.meetings import Meeting
+from team_bot.domain.review_teams import TeamMatch
 from team_bot.domain.worklog import MemberSummary, WorkLog, summarize
 from team_bot.services.github import PullRequest
 
 DISCORD_DESCRIPTION_LIMIT = 4096
 DISCORD_FIELD_LIMIT = 1024
+DISCORD_TITLE_LIMIT = 256
 
 # /help sections, in display order, keyed by the cog class that owns the commands.
 HELP_SECTIONS = {
@@ -59,7 +61,7 @@ def help_sections(commands: Sequence[CommandHelp]) -> list[tuple[str, str]]:
     return sections
 
 
-def automatic_posts(pr_summary_time: time | None) -> str:
+def automatic_posts(pr_summary_time: time | None, review_routing: bool = False) -> str:
     lines = [
         "- Deadline reminders 3 days and 1 day before each milestone",
         "- Meeting reminders 1 day and 1 hour before",
@@ -70,6 +72,10 @@ def automatic_posts(pr_summary_time: time | None) -> str:
         lines.append(
             f"- Open PR summary every day at {pr_summary_time:%H:%M}, when PRs are waiting"
         )
+    if review_routing:
+        lines.append("- Review pings to the team a PR concerns, once it is ready for review")
+    else:
+        lines.append("- PR review pings: turned off")
     return "\n".join(lines)
 
 
@@ -186,6 +192,43 @@ def pr_summary(prs: Sequence[PullRequest], now: datetime) -> tuple[str, str]:
             line += " · waiting on " + ", ".join(pr.requested_reviewers)
         lines.append(line)
     return f"Open PRs: {len(ready)} ready for review", truncate("\n\n".join(lines))
+
+
+def match_reason(match: TeamMatch) -> str:
+    """Why a team was picked: "label `team: swe`", "labels `swe`, `Dashboard`"."""
+    word = "label" if len(match.labels) == 1 else "labels"
+    return f"{word} " + ", ".join(f"`{label}`" for label in match.labels)
+
+
+def review_request(
+    pr: PullRequest,
+    matches: Sequence[TeamMatch],
+    role_ids: Mapping[str, int],
+    reopened: bool = False,
+) -> tuple[str, str, str]:
+    """Return (content, embed title, embed description) for the Discord review ping.
+
+    `role_ids` maps team keys to their Discord role. Those roles are mentioned; teams
+    without one are named in bold.
+    """
+    teams = [
+        f"<@&{role_ids[m.team.key]}>" if m.team.key in role_ids else f"**{m.team.name}**"
+        for m in matches
+    ]
+    content = " ".join(teams) + " review requested" + (" (PR reopened)" if reopened else "")
+    title = truncate(f"#{pr.number}: {pr.title}", DISCORD_TITLE_LIMIT)
+    lines = [f"by {pr.author}", ""]
+    if any(m.labels for m in matches):
+        lines += [f"**{m.team.name}**: {match_reason(m)}" for m in matches]
+    else:
+        lines.append("No team label on this PR, so every team is asked. Add a team label to")
+        lines.append("ping only that team next time.")
+    return content, title, truncate("\n".join(lines))
+
+
+def routing_result(pr: PullRequest, matches: Sequence[TeamMatch]) -> str:
+    """One line per routed PR in the /run reply."""
+    return f"#{pr.number} {pr.title}: " + ", ".join(m.team.name for m in matches)
 
 
 def _md_cell(text: str) -> str:

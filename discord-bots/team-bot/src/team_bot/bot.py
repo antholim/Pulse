@@ -20,6 +20,7 @@ EXTENSIONS = (
     "team_bot.cogs.meetings",
     "team_bot.cogs.deadlines",
     "team_bot.cogs.pr_summary",
+    "team_bot.cogs.review_routing",
     "team_bot.cogs.run",  # after the cogs whose jobs it triggers
 )
 

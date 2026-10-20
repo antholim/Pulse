@@ -5,7 +5,7 @@ product, and PULSE code must not import from it.
 
 | Bot | What it does |
 | --- | --- |
-| [team-bot](team-bot/) | Work logging (`/log`, `/contributions`), iteration deadline and meeting reminders, daily open PR summary (#44) |
+| [team-bot](team-bot/) | Work logging (`/log`, `/contributions`), iteration deadline and meeting reminders, daily open PR summary (#44), PR review routing to the data, SWE and infra teams (#76) |
 
 Each bot is a self-contained project with its own dependencies, tests and README. Its CI
 runs only when files in its folder change.

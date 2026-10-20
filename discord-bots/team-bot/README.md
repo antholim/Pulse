@@ -18,6 +18,7 @@ open pull requests. This is team tooling, not part of the PULSE product.
 | `/run deadlines [force]` | Run the deadline reminder job now. |
 | `/run meeting-reminders [force]` | Run the meeting reminder job now. |
 | `/run pr-summary` | Post the open PR summary to the channel now. |
+| `/run review-routing [pr]` | Ping the teams of PRs ready for review now. With `pr`, ping that PR's teams again. |
 | `/help` | List every command with its options (only you see it). |
 | `/ping` | Check the bot is online. |
 
@@ -29,6 +30,8 @@ Automatic posts, all in the reminders channel unless configured otherwise:
   scheduled less than a day ahead.
 - **Daily open PR summary** at `PR_SUMMARY_TIME` (21:00 by default). Nothing is posted when no
   PR is waiting.
+- **Review pings** to the team a PR concerns, within a minute of it being ready for review.
+  See [PR review routing](#pr-review-routing).
 
 ### Running a scheduled job by hand
 
@@ -41,6 +44,7 @@ who ran it sees the reply, which lists what was posted.
 | `/run deadlines` | Ignores `REMINDER_HOUR` | Posts a reminder for the next deadline even if it is not due yet |
 | `/run meeting-reminders` | Nothing different | Reminds everyone of the next meeting even if it is not due yet |
 | `/run pr-summary` | Posts even when no PR is waiting (without pinging the role) | (no option) |
+| `/run review-routing` | Nothing different | `pr: 12` pings that PR's teams even if they were already pinged |
 
 A forced reminder is not recorded as sent, so the regular 3-day / 1-day and 1-day / 1-hour
 reminders still go out. Each `/run` job can be used once every 30 seconds per server.
@@ -125,6 +129,54 @@ It does need a disk that persists between restarts for the SQLite file. A teamma
 always-on machine or a small free VM both work. Back up the `.db` file now and then (it is a
 single file, copying it is enough).
 
+## PR review routing
+
+When a PR is ready for review, the bot pings the Discord role of each team it concerns
+(data and AI, SWE, infra and security) and asks the team's members for a review on GitHub.
+
+Teams are picked **by label only**, never by the files the PR changes:
+
+- A team is picked when any of its labels is on the PR or on an issue the PR closes
+  (`Closes #12`), for example `team: data-ai` or `data` for the data and AI team.
+- A PR with no team label pings **every** team. Add the label when opening the PR to ping
+  only that team.
+- Each team is pinged once per PR. A label added later pings only the team it adds.
+- A closed PR that is reopened pings its teams again (the message says "PR reopened").
+- Draft PRs wait until they are marked ready for review.
+
+The bot has no public URL, so GitHub cannot tell it when a PR is opened. It checks the open
+PRs every `REVIEW_ROUTING_SECONDS` (60 by default) and only looks closer at PRs that changed,
+so a ping arrives within about a minute while the bot is running. PRs opened while it was
+off are picked up when it starts again. The first time routing runs, PRs opened more than an
+hour before are left alone, so turning it on does not ping every team at once.
+
+### Teams
+
+Teams, their labels, members and Discord roles are set in
+[review-teams.toml](review-teams.toml). Restart the bot after editing it. Relative paths in
+`.env` (`DB_PATH`, `REVIEW_TEAMS_PATH`) are taken from the folder of the `.env` file, so the
+bot can be started from any folder.
+
+### Setup
+
+1. Set each team's `discord_role` to the name of its Discord role (`data team`, `swe team`,
+   `infra team` by default). The bot finds the role by name in the server, any case. A role
+   ID also works (Developer Mode on, **Server Settings > Roles**, right-click, **Copy Role
+   ID**). If no role is found, the message names the team in bold and the bot logs a
+   warning. Either tick **Allow anyone to @mention this role** on each role, or give the bot
+   the **Mention @everyone, @here and All Roles** permission, otherwise the role name shows
+   but nobody is notified.
+2. Pings go to `REVIEW_ROUTING_CHANNEL_ID`, or the PR summary channel if it is not set.
+3. Optional: fill in `members` (GitHub usernames) to also request reviews on GitHub. The
+   bot's token then needs **Pull requests: Read and write**; with a read-only token the bot
+   still pings Discord and logs a warning.
+
+### Trying it
+
+Start the bot, then open a PR (not a draft) with the `team: data-ai`, `team: swe` or
+`team: infra-security` label. Within a minute that team is pinged. To ping the teams of a PR
+that was already open, use `/run review-routing pr: <number>`.
+
 ## GitHub notifications
 
 This uses GitHub's built-in Discord support, no code involved. It needs admin access to the
@@ -156,6 +208,9 @@ All settings are environment variables. See [.env.example](.env.example) for the
 | `REMINDER_HOUR` | no | `9` | Deadline reminders wait until this hour |
 | `DB_PATH` | no | `data/team-bot.db` | |
 | `RELEASES` | no | `Release 1=4,Release 2=8,Final Release=13` | Release name = last iteration |
+| `REVIEW_ROUTING_SECONDS` | no | `60` | How often to check for PRs to route, `0` turns it off |
+| `REVIEW_ROUTING_CHANNEL_ID` | no | PR summary channel | Where the review pings go |
+| `REVIEW_TEAMS_PATH` | no | `review-teams.toml` | |
 
 The bot never mentions `@everyone` or `@here`.
 
@@ -177,7 +232,7 @@ src/team_bot/
   formatting.py      message and markdown text (pure functions)
   cogs/              slash commands and scheduled jobs, kept thin
     run.py           /run group: triggers the jobs in deadlines, meetings, pr_summary
-  domain/            iterations, work log summaries, reminder timing, story points
+  domain/            iterations, work log summaries, reminder timing, story points, review teams
   services/          SQLite storage and the GitHub client
 tests/               pytest suite, GitHub is faked and SQLite runs in memory
 ```

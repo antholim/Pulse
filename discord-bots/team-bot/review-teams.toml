@@ -1,0 +1,45 @@
+# Which team reviews which pull requests (issue #76).
+#
+# The team bot checks GitHub every minute. For each open PR that is ready for review, it
+# pings the Discord role of every team whose label is on the PR or on an issue the PR closes
+# ("Closes #12"), and asks the team's members for a review on GitHub (never the PR author;
+# needs a GitHub token with Pull requests: write, otherwise only the ping is sent).
+# Only these team labels count (any one of them, in any case), not feature labels.
+#
+# A PR with no team label pings every team.
+# Each team is pinged once per PR, and again if the PR is closed and reopened.
+# Restart the bot after editing this file.
+#
+# discord_role: the name of the team's Discord role, as shown in Server Settings > Roles
+# (any case, with or without the @). A role ID works too: discord_role = 123456789.
+# If the role is not found, the message names the team in bold and pings nobody.
+
+[teams.data]
+name = "Data & AI team"
+discord_role = "data team"
+members = []
+labels = [
+  "team: data-ai",
+  "data-ai",
+  "data",
+]
+
+[teams.swe]
+name = "SWE team"
+discord_role = "swe team"
+members = []
+labels = [
+  "team: swe",
+  "swe",
+]
+
+[teams.infra]
+name = "Infra & security team"
+discord_role = "infra team"
+members = []
+labels = [
+  "team: infra-security",
+  "infra-security",
+  "infra",
+  "security",
+]

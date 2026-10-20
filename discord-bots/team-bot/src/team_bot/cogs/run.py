@@ -2,8 +2,9 @@
 
 Each subcommand calls the same method the schedule uses, so a manual run behaves exactly
 like a scheduled one (same checks, same messages, same "already sent" records). The only
-differences: deadline reminders ignore REMINDER_HOUR, and the PR summary posts even when
-no PR is waiting. `force: True` posts the next reminder even if it is not due yet.
+differences: deadline reminders ignore REMINDER_HOUR, the PR summary posts even when
+no PR is waiting, and review routing with `pr` pings that PR's teams again.
+`force: True` posts the next reminder even if it is not due yet.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from team_bot.cogs.deadlines import DeadlinesCog
     from team_bot.cogs.meetings import MeetingsCog
     from team_bot.cogs.pr_summary import PRSummaryCog
+    from team_bot.cogs.review_routing import ReviewRoutingCog
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +88,16 @@ class RunCog(commands.Cog):
             lambda: cog.post_summary(skip_if_empty=False),
             force_hint=False,
         )
+
+    @run.command(
+        name="review-routing", description="Ping the teams of PRs that are ready for review"
+    )
+    @app_commands.describe(pr="Ping the teams of this open PR now, even if they were pinged")
+    @COOLDOWN
+    async def review_routing(self, interaction: discord.Interaction, pr: int | None = None) -> None:
+        cog = cast("ReviewRoutingCog", self.bot.get_cog("ReviewRoutingCog"))
+        action = cog.run_check if pr is None else lambda: cog.route_now(pr)
+        await self._execute(interaction, "review routing", action, force_hint=False)
 
 
 async def setup(bot: TeamBot) -> None:

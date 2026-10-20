@@ -1,4 +1,4 @@
-"""SQLite storage for members, work logs, meetings and sent reminders.
+"""SQLite storage for members, work logs, meetings, sent reminders and review routing.
 
 The data is tiny and every query is fast, so the standard library sqlite3 module
 is used directly from the event loop. Datetimes are stored as UTC ISO strings.
@@ -49,7 +49,28 @@ CREATE TABLE IF NOT EXISTS reminders_sent (
     sent_at           TEXT NOT NULL,
     PRIMARY KEY (milestone_number, kind)
 );
+
+-- Teams already pinged for each PR, so each team is pinged once per PR.
+CREATE TABLE IF NOT EXISTS review_routing (
+    pr_number  INTEGER NOT NULL,
+    team_key   TEXT NOT NULL,
+    routed_at  TEXT NOT NULL,
+    PRIMARY KEY (pr_number, team_key)
+);
+
+-- The PR's updated_at when it was last checked; unchanged PRs are not fetched again.
+CREATE TABLE IF NOT EXISTS review_checked (
+    pr_number   INTEGER PRIMARY KEY,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bot_state (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
 """
+
+ROUTING_SINCE_KEY = "review_routing_since"
 
 
 def _utc_iso(value: datetime) -> str:
@@ -211,6 +232,65 @@ class Storage:
                 """,
                 (milestone_number, kind, _utc_iso(now)),
             )
+
+    # Review routing
+
+    def routed_teams(self, pr_number: int) -> set[str]:
+        rows = self._conn.execute(
+            "SELECT team_key FROM review_routing WHERE pr_number = ?", (pr_number,)
+        ).fetchall()
+        return {row["team_key"] for row in rows}
+
+    def mark_teams_routed(self, pr_number: int, team_keys: list[str], now: datetime) -> None:
+        with self._conn:
+            self._conn.executemany(
+                """
+                INSERT OR IGNORE INTO review_routing (pr_number, team_key, routed_at)
+                VALUES (?, ?, ?)
+                """,
+                [(pr_number, key, _utc_iso(now)) for key in team_keys],
+            )
+
+    def last_routed_at(self, pr_number: int) -> datetime | None:
+        row = self._conn.execute(
+            "SELECT MAX(routed_at) AS at FROM review_routing WHERE pr_number = ?", (pr_number,)
+        ).fetchone()
+        return _parse_utc(row["at"]) if row["at"] else None
+
+    def forget_routed_teams(self, pr_number: int) -> None:
+        """Start over for a reopened PR, so every team is pinged again."""
+        with self._conn:
+            self._conn.execute("DELETE FROM review_routing WHERE pr_number = ?", (pr_number,))
+
+    def review_checked_at(self, pr_number: int) -> datetime | None:
+        row = self._conn.execute(
+            "SELECT updated_at FROM review_checked WHERE pr_number = ?", (pr_number,)
+        ).fetchone()
+        return _parse_utc(row["updated_at"]) if row else None
+
+    def mark_review_checked(self, pr_number: int, updated_at: datetime) -> None:
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO review_checked (pr_number, updated_at) VALUES (?, ?)
+                ON CONFLICT(pr_number) DO UPDATE SET updated_at = excluded.updated_at
+                """,
+                (pr_number, _utc_iso(updated_at)),
+            )
+
+    def review_routing_since(self, start: datetime) -> datetime:
+        """The cutoff recorded the first time review routing ran (`start` on that first call).
+        PRs opened before it are left alone, so turning routing on does not ping every team
+        for every PR already open."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO bot_state (key, value) VALUES (?, ?)",
+                (ROUTING_SINCE_KEY, _utc_iso(start)),
+            )
+        row = self._conn.execute(
+            "SELECT value FROM bot_state WHERE key = ?", (ROUTING_SINCE_KEY,)
+        ).fetchone()
+        return _parse_utc(row["value"])
 
 
 _WORK_LOG_SELECT = """

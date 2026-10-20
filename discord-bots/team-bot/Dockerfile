@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DB_PATH=/data/team-bot.db
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md review-teams.toml ./
 COPY src ./src
 RUN pip install --no-cache-dir . \
     && useradd --create-home bot \
