@@ -28,3 +28,22 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest --cov --cov-report=term-missing --cov-fail-under=90
+
+  deploy:
+    # Ship to Fly only after the tests pass on a push to main, never from a PR.
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One deploy at a time; a newer push waits instead of racing the running one.
+    concurrency:
+      group: team-bot-deploy
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: discord-bots/team-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
