@@ -13,7 +13,7 @@ import logging
 import math
 import threading
 import time
-from collections.abc import Callable, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 
 import httpx
 
@@ -29,6 +29,13 @@ class OmerloAuthError(Exception):
 
 
 class OmerloAuth(httpx.Auth):
+    """Sync only: use it with `httpx.Client`.
+
+    The lock is held while the token request is in flight. That is right for threads,
+    but under `httpx.AsyncClient` a second coroutine would block on it and freeze the
+    event loop, so async use is refused.
+    """
+
     # Token responses must be read to get the access token.
     requires_response_body = True
 
@@ -60,6 +67,12 @@ class OmerloAuth(httpx.Auth):
 
         self._sign(request, token)
         yield request
+
+    async def async_auth_flow(
+        self, request: httpx.Request
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        raise NotImplementedError("OmerloAuth only supports httpx.Client, not httpx.AsyncClient")
+        yield request  # unreachable; keeps this an async generator, as httpx expects
 
     def _has_valid_token(self) -> bool:
         return self._access_token is not None and self._clock() < self._refresh_at
