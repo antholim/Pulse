@@ -1,7 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Index,
+    Text,
+    UniqueConstraint,
+    func,
+    literal_column,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, json_column, one_of, same_tenant_fk, tenant_id_column, uuid_pk
@@ -56,6 +66,16 @@ class SourceRecord(Base):
             "external_id",
             unique=True,
             postgresql_where=CURRENT_VERSION,
+        ),
+        # Versions of one record never overlap in time, so the as-of query (#58) finds at
+        # most one. The equality columns need the btree_gist extension.
+        ExcludeConstraint(
+            ("tenant_id", "="),
+            ("source_id", "="),
+            ("external_id", "="),
+            (func.tstzrange(literal_column("valid_from"), literal_column("valid_to")), "&&"),
+            name="ex_source_record_versions_overlap",
+            using="gist",
         ),
         # Every version of a record in order, for the as-of query (#58); indexes the
         # source foreign key.

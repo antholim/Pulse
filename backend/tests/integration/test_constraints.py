@@ -41,8 +41,8 @@ def add_tenant(session: Session, name: str) -> TenantRows:
     return TenantRows(tenant, source, run)
 
 
-def add_record(session: Session, rows: TenantRows, external_id: str, **fields) -> SourceRecord:
-    record = SourceRecord(
+def new_version(rows: TenantRows, external_id: str, **fields) -> SourceRecord:
+    return SourceRecord(
         tenant_id=rows.tenant.id,
         source_id=rows.source.id,
         external_id=external_id,
@@ -51,6 +51,10 @@ def add_record(session: Session, rows: TenantRows, external_id: str, **fields) -
         last_seen_run=rows.run.id,
         **fields,
     )
+
+
+def add_record(session: Session, rows: TenantRows, external_id: str, **fields) -> SourceRecord:
+    record = new_version(rows, external_id, **fields)
     session.add(record)
     session.flush()
     return record
@@ -154,35 +158,48 @@ def test_a_match_candidate_cannot_pair_records_of_two_tenants(session, tenant_a,
     )
 
 
+def october(day: int) -> datetime:
+    return datetime(2026, 10, day, tzinfo=UTC)
+
+
 def test_only_one_current_version_per_record(session, tenant_a):
     add_record(session, tenant_a, "org-1")
 
-    assert rejected(session, current_version(tenant_a, "org-1"))
+    assert rejected(session, new_version(tenant_a, "org-1"))
 
 
 def test_closed_versions_sit_next_to_the_current_one(session, tenant_a):
-    closed = datetime(2026, 10, 1, tzinfo=UTC)
-    add_record(session, tenant_a, "org-1", valid_from=closed, valid_to=closed)
-    add_record(session, tenant_a, "org-1", valid_from=closed, valid_to=closed)
+    add_record(session, tenant_a, "org-1", valid_from=october(1), valid_to=october(5))
+    add_record(session, tenant_a, "org-1", valid_from=october(5), valid_to=october(10))
 
-    assert not rejected(session, current_version(tenant_a, "org-1"))
+    assert not rejected(session, new_version(tenant_a, "org-1", valid_from=october(10)))
+
+
+@pytest.mark.parametrize(
+    ("valid_from", "valid_to"),
+    [(october(1), october(5)), (october(3), october(8)), (october(4), None)],
+    ids=["same range", "partial overlap", "current version overlaps"],
+)
+def test_versions_of_a_record_cannot_overlap(session, tenant_a, valid_from, valid_to):
+    add_record(session, tenant_a, "org-1", valid_from=october(1), valid_to=october(5))
+
+    assert rejected(
+        session, new_version(tenant_a, "org-1", valid_from=valid_from, valid_to=valid_to)
+    )
+
+
+def test_versions_of_different_records_can_overlap(session, tenant_a):
+    add_record(session, tenant_a, "org-1", valid_from=october(1), valid_to=october(5))
+
+    assert not rejected(
+        session, new_version(tenant_a, "org-2", valid_from=october(1), valid_to=october(5))
+    )
 
 
 def test_the_same_external_id_can_be_current_in_two_tenants(session, tenant_a, tenant_b):
     add_record(session, tenant_a, "org-1")
 
-    assert not rejected(session, current_version(tenant_b, "org-1"))
-
-
-def current_version(rows: TenantRows, external_id: str) -> SourceRecord:
-    return SourceRecord(
-        tenant_id=rows.tenant.id,
-        source_id=rows.source.id,
-        external_id=external_id,
-        kind="organization",
-        first_seen_run=rows.run.id,
-        last_seen_run=rows.run.id,
-    )
+    assert not rejected(session, new_version(tenant_b, "org-1"))
 
 
 @pytest.mark.parametrize(
