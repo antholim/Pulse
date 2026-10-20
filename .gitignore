@@ -29,3 +29,6 @@ coverage/
 
 # Logs
 *.log
+
+# Generated synthetic fixtures (rebuild with python -m synthetic.omerlo_fixtures)
+backend/synthetic/out/
