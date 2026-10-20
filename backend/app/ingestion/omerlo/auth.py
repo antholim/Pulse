@@ -38,7 +38,7 @@ class OmerloAuth(httpx.Auth):
         self._lock = threading.Lock()
         self._access_token: str | None = None
         self._refresh_token: str | None = None
-        self._expires_at = 0.0
+        self._refresh_at = 0.0
 
     def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
         with self._lock:
@@ -62,8 +62,7 @@ class OmerloAuth(httpx.Auth):
         yield request
 
     def _has_valid_token(self) -> bool:
-        margin = self._settings.token_refresh_margin_seconds
-        return self._access_token is not None and self._clock() < self._expires_at - margin
+        return self._access_token is not None and self._clock() < self._refresh_at
 
     def _sign(self, request: httpx.Request, token: str | None) -> None:
         request.headers["Authorization"] = f"Bearer {token}"
@@ -104,8 +103,17 @@ class OmerloAuth(httpx.Auth):
             raise OmerloAuthError("Omerlo token response has no access_token") from None
 
         expires_in = payload.get("expires_in")
-        # Without an expiry, keep the token until the API rejects it with a 401.
-        self._expires_at = math.inf if expires_in is None else self._clock() + float(expires_in)
+        if expires_in is None:
+            # Without an expiry, keep the token until the API rejects it with a 401.
+            self._refresh_at = math.inf
+        else:
+            try:
+                lifetime = float(expires_in)
+            except (TypeError, ValueError):
+                raise OmerloAuthError("Omerlo token response has an invalid expires_in") from None
+            # A margin longer than the lifetime would refetch on every request.
+            margin = min(self._settings.token_refresh_margin_seconds, lifetime / 2)
+            self._refresh_at = self._clock() + lifetime - margin
         self._access_token = access_token
         self._refresh_token = payload.get("refresh_token") or self._refresh_token
         logger.info("Obtained a new Omerlo access token (expires in %s s)", expires_in)

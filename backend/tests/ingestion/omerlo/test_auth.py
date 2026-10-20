@@ -112,6 +112,35 @@ def test_token_is_refreshed_before_expiry(client, clock):
 
 
 @respx.mock
+def test_short_lived_token_is_reused_until_half_its_lifetime(client, clock):
+    # expires_in (30 s) is shorter than the 60 s margin, so the margin shrinks to 15 s.
+    token_route = respx.post(TOKEN_URL).mock(
+        side_effect=[token_response("tok-1", expires_in=30), token_response("tok-2")]
+    )
+    respx.get(CONTENTS_URL).mock(return_value=httpx.Response(200))
+
+    client.get("/api/media/v1/contents")
+    clock.now += 14
+    client.get("/api/media/v1/contents")
+    assert token_route.call_count == 1
+
+    clock.now += 1
+    client.get("/api/media/v1/contents")
+    assert token_route.call_count == 2
+
+
+@respx.mock
+@pytest.mark.parametrize("expires_in", ["soon", [3600], {"s": 1}])
+def test_invalid_expires_in_raises(client, expires_in):
+    respx.post(TOKEN_URL).mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-1", "expires_in": expires_in})
+    )
+
+    with pytest.raises(OmerloAuthError, match="invalid expires_in"):
+        client.get("/api/media/v1/contents")
+
+
+@respx.mock
 def test_token_without_expiry_is_kept_until_rejected(client, clock):
     token_route = respx.post(TOKEN_URL).mock(return_value=token_response("tok-1", expires_in=None))
     respx.get(CONTENTS_URL).mock(return_value=httpx.Response(200))
