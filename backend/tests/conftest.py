@@ -1,8 +1,12 @@
+import io
+import json
 import os
 
 import pytest
+import structlog
 
 from app.core import database
+from app.core.logging import configure_logging
 
 
 @pytest.fixture
@@ -22,3 +26,13 @@ def test_database(monkeypatch):
     database.get_engine().dispose()
     database.get_engine.cache_clear()
     database.get_session_factory.cache_clear()
+
+
+@pytest.fixture
+def log_output():
+    """Send logs to a buffer at DEBUG level; call the result to get the JSON lines."""
+    stream = io.StringIO()
+    configure_logging(level="DEBUG", stream=stream)
+    yield lambda: [json.loads(line) for line in stream.getvalue().splitlines()]
+    structlog.contextvars.clear_contextvars()
+    configure_logging()

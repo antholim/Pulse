@@ -19,6 +19,15 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    files: ["src/services/logger.ts"],
+    rules: {
+      "no-console": "off",
+    },
   },
   eslintConfigPrettier,
 ]);
