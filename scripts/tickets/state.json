@@ -61,7 +61,17 @@
     "S1-46": 65,
     "S1-47": 66,
     "S1-48": 67,
-    "S1-49": 68
+    "S1-49": 68,
+    "S1-51": 105,
+    "S1-52": 106,
+    "S1-53": 107,
+    "S1-54": 108,
+    "S1-55": 109,
+    "S1-56": 110,
+    "S2-01": 111,
+    "S2-02": 112,
+    "S2-03": 113,
+    "S2-04": 114
   },
   "linked": [
     "S1-01",
@@ -112,13 +122,23 @@
     "S1-46",
     "S1-47",
     "S1-48",
-    "S1-49"
+    "S1-49",
+    "S1-51",
+    "S1-52",
+    "S1-53",
+    "S1-54",
+    "S1-55",
+    "S1-56",
+    "S2-01",
+    "S2-02",
+    "S2-03",
+    "S2-04"
   ],
   "hashes": {
     "E1": "3f1ea51a0fcf4845e6d965b7826cc4309ab81709bb4886426641467551b4630a",
     "E2": "a76d513cc5779454f6ef989ac51f89707f0af0c979322917f9ffbbe90f68f638",
-    "E3": "1548c49a4b2317354f279d7ffe50246dc20dc5506702b6db4f2f031077af8071",
-    "E4": "224027d260f61de05fe7328c8c326adad6563cca204c78e1762757dffd7a3dd2",
+    "E3": "ca1222bb48443b6d0f59dfe86115c26a28c1c489c4ec828848466deccad80dce",
+    "E4": "541919b4fce5716e7e173eb688fe3a24d7dccc4e7a79d6f521b00e6e827a5aa5",
     "E5": "1dbdf1b35b585c65bbfe412750244bfbfcdf2a096ee425d8c32b1037c30e17ba",
     "E6": "7ae6a1e8e23ee0d898ab63ebdcb97e13d749af0974b288a603f29f5aab03fba2",
     "E7": "ed4f53e1952a56706d81bd808064171c231550fe3f691ed40f61899ef3d7f652",
@@ -176,7 +196,17 @@
     "S1-41": "3bc8f7c3594ad5892b7def459102a3fc54367cc7e31571f1a73643541d02f6b4",
     "S1-42": "1c3e6f7fa4a5e2107a0e84827a59bdd5edcd3e296a4bde11e3666a6659a2d638",
     "S1-45": "2639844d9f70eb798fe3081438386dd4a589b797ea7798ca0758bf2074150cab",
-    "S1-46": "b879e198b4d2f2a3bbd092566ced3bdcbf5f8d1814886f0a1b361a76054d565c"
+    "S1-46": "b879e198b4d2f2a3bbd092566ced3bdcbf5f8d1814886f0a1b361a76054d565c",
+    "S1-51": "22a47d62e9be1d41e03813c9111ff4d281c6f7d865f9e3e6ab88a71d3ad335d5",
+    "S1-52": "2fd7744938ffccaf0be2beb9722dfb7a5f67fdec951e2cc0c6f1851758b9e8bc",
+    "S1-53": "8b7a3bedd11b1672a4e0137a37316ed7f03d6e8e62edc73729844c4a9c80715b",
+    "S2-02": "e309195e0ff5e7ff3119fbf422a6821c647bf809b8bd26355d3ad9061ef7f517",
+    "S2-03": "374377828fc1423015f1f8a4be5ec6ab13c0a3728861e03fad6ecdfc71a6eac9",
+    "S2-04": "f09fe409412182dab4b60e286c58323da158901ef556ff1aab4b99260b04a5dd",
+    "S1-54": "f653712d8805cf573d9ee1b235b09dfe586debf0cea87b01970d39c6ed11ef6e",
+    "S1-55": "52cb5dc685e4b20c14017a5dad0524b154e88f459dbff50aa479ed63377a6c7d",
+    "S1-56": "e04047f10b196be0219a33659b28db2dae2e90ce98cde8dc6a9e07c7d0d15703",
+    "S2-01": "57f13f5b0785060c40d02e8254510cfa04d326f2478c94a20cb2b556b7b278ce"
   },
   "meta": {
     "E1": {
@@ -812,6 +842,119 @@
         "Release 1",
         "documentation",
         "project-mgmt"
+      ]
+    },
+    "S1-51": {
+      "title": "Extract and normalize the city of organization source records",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-52": {
+      "title": "Plug the cleaning step into the mappers without dropping re-synced records",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-53": {
+      "title": "Store the evidence behind each organization link",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-54": {
+      "title": "Merge organizations joined by a chain of matches and choose their display values",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S1-55": {
+      "title": "Run Tier 1 matching after every sync run",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-56": {
+      "title": "Re-check automatic links when a record's matching fields change",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S2-01": {
+      "title": "Match organizations with Tier 2 fuzzy name similarity",
+      "milestone": "Iteration 5",
+      "labels": [
+        "Entity Resolution",
+        "Release 2",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S2-02": {
+      "title": "Match people with a normalized name and a secondary signal",
+      "milestone": "Iteration 6",
+      "labels": [
+        "Entity Resolution",
+        "Release 2",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S2-03": {
+      "title": "Review possible matches in a manual review queue",
+      "milestone": "Iteration 6",
+      "labels": [
+        "Entity Resolution",
+        "Manual Match Review",
+        "Release 2",
+        "should",
+        "team: swe",
+        "user-story"
+      ]
+    },
+    "S2-04": {
+      "title": "Evaluate matching on a labelled sample of real, sponsor-approved pairs",
+      "milestone": "Iteration 7",
+      "labels": [
+        "Entity Resolution",
+        "Release 2",
+        "must",
+        "task",
+        "team: data-ai"
       ]
     }
   }
