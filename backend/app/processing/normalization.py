@@ -15,7 +15,7 @@ import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 import phonenumbers
 import tldextract
@@ -23,6 +23,9 @@ from phonenumbers import NumberParseException, PhoneNumberFormat
 
 # Default region for numbers without a country code (wiki + #26 AC).
 DEFAULT_PHONE_REGION = "CA"
+
+# Reject absurdly long inputs before tokenization / library parsing.
+MAX_IDENTIFIER_LENGTH = 2048
 
 # Warning codes returned on PhoneResult when E.164 cannot be produced.
 PHONE_WARNING_EMPTY = "empty"
@@ -33,6 +36,8 @@ PHONE_WARNING_IMPOSSIBLE = "impossible"
 LINKEDIN_APEX_HOST = "linkedin.com"
 LINKEDIN_HOSTS = frozenset({"linkedin.com", "www.linkedin.com"})
 LINKEDIN_PROFILE_KINDS = frozenset({"company", "in"})
+# LinkedIn vanity slugs are lowercase alnum / hyphen in practice.
+_LINKEDIN_SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
 
 # Ampersand / conjunction variants collapsed to one token for org-name keys.
 CONNECTOR_TOKEN = "and"
@@ -111,7 +116,9 @@ def _blank_to_none(value: str | None) -> str | None:
     if value is None:
         return None
     stripped = value.strip()
-    return stripped if stripped else None
+    if not stripped or len(stripped) > MAX_IDENTIFIER_LENGTH:
+        return None
+    return stripped
 
 
 def _tokenize_name(value: str) -> list[str]:
@@ -197,11 +204,13 @@ def _is_linkedin_host(host: str) -> bool:
 
 def _linkedin_from_path(path: str) -> str | None:
     """Pull ``company/<slug>`` or ``in/<slug>`` from a URL path."""
+    # Defense in depth: path-only callers may still pass query/fragment junk.
+    path = path.split("?", 1)[0].split("#", 1)[0]
     parts = [part for part in path.split("/") if part]
     for index, part in enumerate(parts):
         if part in LINKEDIN_PROFILE_KINDS and index + 1 < len(parts):
             slug = parts[index + 1].strip().lower()
-            if slug:
+            if _LINKEDIN_SLUG.fullmatch(slug):
                 return f"{part}/{slug}"
     return None
 
@@ -211,16 +220,16 @@ def normalize_linkedin(value: str | None) -> str | None:
     raw = _blank_to_none(value)
     if raw is None:
         return None
-    lowered = raw.strip().lower()
+    lowered = raw.lower()
     if "://" in lowered or lowered.startswith("//"):
-        parsed = urlparse(lowered if "://" in lowered else f"https:{lowered}")
+        parsed = urlsplit(lowered if "://" in lowered else f"https:{lowered}")
         host = parsed.hostname or ""
         if not _is_linkedin_host(host):
             return None
         return _linkedin_from_path(parsed.path)
 
     # Host without scheme: ``linkedin.com/company/acme`` (reject other hosts).
-    parsed = urlparse(f"https://{lowered}")
+    parsed = urlsplit(f"https://{lowered}")
     host = parsed.hostname or ""
     if host and "." in host:
         if not _is_linkedin_host(host):
@@ -228,8 +237,9 @@ def normalize_linkedin(value: str | None) -> str | None:
         return _linkedin_from_path(parsed.path)
 
     # Path-only inputs such as ``/fr/company/acme`` or ``company/acme``.
-    path = lowered if lowered.startswith("/") else f"/{lowered}"
-    return _linkedin_from_path(path)
+    # urlsplit separates ?query and #fragment that full-URL parsing already drops.
+    path_part = urlsplit(lowered if lowered.startswith("/") else f"/{lowered}").path
+    return _linkedin_from_path(path_part)
 
 
 def normalize_email(value: str | None) -> str | None:
@@ -260,9 +270,12 @@ def normalize_phone(value: str | None) -> PhoneResult:
     Uses ``is_possible_number`` (not ``is_valid_number``) so synthetic 555
     exchanges still format for fixture tests. Never raises to callers.
     """
-    raw = _blank_to_none(value)
-    if raw is None:
+    if value is None or not value.strip():
         return PhoneResult(e164=None, warnings=(PHONE_WARNING_EMPTY,))
+
+    raw = value.strip()
+    if len(raw) > MAX_IDENTIFIER_LENGTH:
+        return PhoneResult(e164=None, warnings=(PHONE_WARNING_UNPARSEABLE,))
 
     try:
         parsed = phonenumbers.parse(raw, DEFAULT_PHONE_REGION)

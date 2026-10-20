@@ -8,6 +8,7 @@ from app.processing.normalization import (
     CONNECTOR_TOKEN,
     DEFAULT_PHONE_REGION,
     LINKEDIN_HOSTS,
+    MAX_IDENTIFIER_LENGTH,
     PHONE_WARNING_EMPTY,
     PHONE_WARNING_IMPOSSIBLE,
     PHONE_WARNING_UNPARSEABLE,
@@ -181,7 +182,12 @@ def test_domain_extractor_never_fetches():
         ("linkedin.com/company/acme", "company/acme"),
         ("/fr/company/acme", "company/acme"),
         ("company/acme", "company/acme"),
+        ("company/acme?trk=public", "company/acme"),
+        ("company/acme#section", "company/acme"),
+        ("/fr/company/acme?trk=1#x", "company/acme"),
         ("in/marie-eve", "in/marie-eve"),
+        ("company/acme!bad", None),
+        ("in/not a slug", None),
     ],
 )
 def test_normalize_linkedin(raw, expected):
@@ -245,3 +251,17 @@ def test_normalize_phone_never_raises_on_garbage():
 
     assert result.e164 is None
     assert result.warnings
+
+
+def test_oversized_inputs_are_rejected():
+    oversized = "a" * (MAX_IDENTIFIER_LENGTH + 1)
+
+    assert normalize_organization_name(oversized) is None
+    assert normalize_person_name(oversized) is None
+    assert normalize_domain(oversized) is None
+    assert normalize_linkedin(f"company/{oversized}") is None
+    assert normalize_email(f"{oversized}@exemple.qc.ca") is None
+
+    phone = normalize_phone(oversized)
+    assert phone.e164 is None
+    assert PHONE_WARNING_UNPARSEABLE in phone.warnings
