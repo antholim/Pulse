@@ -9,6 +9,7 @@ from app.core.logging import (
     configure_logging,
     get_logger,
     level_from_env,
+    logged_run,
     mask_sensitive_data,
 )
 
@@ -198,3 +199,46 @@ def test_level_from_env_rejects_unknown_levels(monkeypatch):
 
     with pytest.raises(ValueError, match="LOG_LEVEL must be one of"):
         level_from_env()
+
+
+def test_a_run_logs_start_and_completion_with_counts_under_one_run_id(log_output):
+    log = get_logger("app.ingestion.example")
+
+    with logged_run("sync", source="omerlo") as counts:
+        log.info("page_fetched", page=1)
+        counts["fetched"] = 120
+        counts["rejected"] = 2
+
+    started, page, completed = log_output()
+    assert started["event"] == "run_started"
+    assert started["run_kind"] == "sync"
+    assert started["source"] == "omerlo"
+    assert page["run_id"] == started["run_id"] == completed["run_id"]
+    assert completed["event"] == "run_completed"
+    assert completed["fetched"] == 120
+    assert completed["rejected"] == 2
+    assert completed["duration_ms"] >= 0
+
+
+def test_a_failed_run_is_logged_with_its_trace_and_reraised(log_output):
+    with (
+        pytest.raises(RuntimeError),
+        logged_run("import", source="csv", run_id="run-42") as counts,
+    ):
+        counts["imported"] = 10
+        raise RuntimeError("file vanished")
+
+    failed = log_output()[-1]
+    assert failed["event"] == "run_failed"
+    assert failed["level"] == "error"
+    assert failed["run_id"] == "run-42"
+    assert failed["imported"] == 10
+    assert "RuntimeError: file vanished" in failed["exception"]
+
+
+def test_the_run_id_is_not_kept_after_the_run(log_output):
+    with logged_run("sync", source="omerlo"):
+        pass
+    get_logger("app.example").info("after")
+
+    assert "run_id" not in log_output()[-1]

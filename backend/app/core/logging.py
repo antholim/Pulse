@@ -2,7 +2,10 @@ import logging
 import os
 import re
 import sys
-from collections.abc import MutableMapping
+import time
+import uuid
+from collections.abc import Iterator, MutableMapping
+from contextlib import contextmanager
 from typing import Any, TextIO
 
 import structlog
@@ -134,3 +137,25 @@ def configure_logging(level: str | None = None, stream: TextIO | None = None) ->
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     return structlog.stdlib.get_logger(name)
+
+
+@contextmanager
+def logged_run(kind: str, source: str, run_id: str | None = None) -> Iterator[dict[str, int]]:
+    """Log a sync or import run under one run id; fill the yielded dict with record counts."""
+    logger = get_logger(__name__)
+    counts: dict[str, int] = {}
+    started = time.perf_counter()
+    with structlog.contextvars.bound_contextvars(
+        run_id=run_id or uuid.uuid4().hex, run_kind=kind, source=source
+    ):
+        logger.info("run_started")
+        try:
+            yield counts
+        except Exception:
+            logger.exception("run_failed", duration_ms=_elapsed_ms(started), **counts)
+            raise
+        logger.info("run_completed", duration_ms=_elapsed_ms(started), **counts)
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 1)
