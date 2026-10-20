@@ -81,7 +81,7 @@ npm run format
 
 | Area     | Framework                     | Mocking                         | Coverage                    |
 | -------- | ----------------------------- | ------------------------------- | --------------------------- |
-| Backend  | pytest                        | pytest-mock, respx (HTTP calls) | pytest-cov, branch coverage |
+| Backend  | pytest                        | pytest-mock                     | pytest-cov, branch coverage |
 | Frontend | Vitest, React Testing Library | Vitest (`vi.mock`, `vi.fn`)     | Vitest with v8              |
 
 Tests mirror the source layout: `backend/tests/core/` tests `backend/app/core/`, and frontend tests sit next to the file they test (`App.test.tsx`). Coverage must stay above 50 percent; core logic modules aim for 80 percent.
