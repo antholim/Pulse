@@ -108,38 +108,20 @@ JOB_TITLES = [
     "Chargée de projet", "Propriétaire", "Conseiller", "Journaliste", "Chef de pupitre",
 ]  # fmt: skip
 
+# Category names in French and English.
 CATEGORIES = [
-    ("Actualités", "actualites"),
-    ("Affaires", "affaires"),
-    ("Culture", "culture"),
-    ("Sports", "sports"),
-    ("Société", "societe"),
-    ("Santé", "sante"),
-    ("Éducation", "education"),
-    ("Environnement", "environnement"),
-    ("Gastronomie", "gastronomie"),
-    ("Tourisme", "tourisme"),
-    ("Technologie", "technologie"),
-    ("Communauté", "communaute"),
-]
-
-HEADLINES = [
-    "{org} inaugure de nouveaux locaux à {c}",
-    "{org} annonce une expansion dans la région",
-    "Un nouveau partenariat pour {org}",
-    "{org} célèbre ses 25 ans",
-    "Portrait : {person}, à la tête de {org}",
-    "{c} accueille un projet de {org}",
-    "{org} recrute pour la saison",
-    "Ce qu'il faut savoir sur le projet de {org}",
-    "La rentrée culturelle à {c}",
-    "Bilan de la saison touristique à {c}",
-]
-
-SPONSORED_HEADLINES = [
-    "Contenu partenaire : découvrez {org}",
-    "{org} vous présente ses nouveautés",
-    "Présenté par {org} : l'automne à {c}",
+    ("Actualités", "News"),
+    ("Affaires", "Business"),
+    ("Culture", "Culture"),
+    ("Sports", "Sports"),
+    ("Société", "Society"),
+    ("Santé", "Health"),
+    ("Éducation", "Education"),
+    ("Environnement", "Environment"),
+    ("Gastronomie", "Food"),
+    ("Tourisme", "Tourism"),
+    ("Technologie", "Technology"),
+    ("Communauté", "Community"),
 ]
 
 EVENT_NAMES = [
