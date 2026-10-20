@@ -56,3 +56,36 @@ Some pairs still share a domain, LinkedIn URL or CRM id (Tier 1 can find them); 
 `omerlo_schema.py` defines each resource as a strict Pydantic model, for the detail and the list shapes; unknown fields fail validation. `--schemas DIR` exports them as JSON Schema.
 
 Shapes follow the [backoffice documentation](https://developers.omerlo.com/docs/backoffice). Two links are assumptions until checked on staging ([#23](https://github.com/antholim/Pulse/issues/23)): a session speaker's `actor_id` is a person id, and a project's `owner_id` is an organization id.
+
+## Mock Omerlo server
+
+`mock_omerlo.py` serves the fixtures like the Omerlo backoffice API, so the connector can run against it without staging: an `x-api-key` per tenant, community lists scoped by workspace that return summaries and sort with `sort_by`, detail and metadata endpoints, and `{"error": ...}` bodies on errors. The ground truth is never served.
+
+How the real API paginates is not documented yet ([#23](https://github.com/antholim/Pulse/issues/23)). The mock takes `limit` on every list and answers with an opaque `meta.next` cursor, sent back as `after`.
+
+```bash
+docker compose --profile mock up mock-omerlo          # or: --profile full for the whole stack
+# without Docker:
+cd backend && uv run python -m synthetic.mock_omerlo  # --fixtures synthetic/out to serve files
+```
+
+When the whole stack runs in Docker (`--profile full`), the `backend` service already points at the mock (`http://mock-omerlo:8100/api`) unless `.env` sets `OMERLO_*`. Leave them unset in `.env`, or set them to staging: `localhost` inside the backend container is the backend itself, not the mock.
+
+For a backend or script running outside Docker, point the connector at it with:
+
+```
+OMERLO_BASE_URL=http://localhost:8100/api
+OMERLO_API_KEY=mock-demo-capitale        # or mock-demo-estrie
+```
+
+Interactive API docs are at http://localhost:8100/docs. In tests, the `mock_omerlo` fixture in `tests/synthetic/conftest.py` gives a `TestClient` over small fixtures.
+
+| Path (under `/api`) | Returns |
+|------|---------|
+| `GET /composer/v2/workspaces` | The tenant's workspaces (summaries) |
+| `GET /composer/v2/workspaces/{id}` | One workspace, with its statuses |
+| `GET /core/v2/categories`, `/core/v2/categories/{id}` | Categories, in full |
+| `GET /community/v2/workspaces/{workspace_id}/{organizations,people,projects,events}` | Summaries; `sort_by`, `profile_type_ids[]` |
+| `GET /community/v2/{organizations,people,projects,events}/{id}` | The full record |
+| `GET /community/v2/{organizations,people,projects,events}/{id}/metadata` | Its key and value entries |
+| `GET /community/v2/events/{id}/sessions` | The event's sessions |
