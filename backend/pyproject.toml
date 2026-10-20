@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "agent-detector==2.0.0",
+    "alembic==1.20.0",
     "annotated-doc==0.0.5",
     "annotated-types==0.8.0",
     "anyio==4.15.1",

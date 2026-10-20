@@ -45,6 +45,29 @@ To run only PostgreSQL while developing the frontend and backend locally:
 docker compose up db
 ```
 
+### Database schema
+
+The schema is created by Alembic migrations in `backend/migrations/`, from the models in `backend/app/models/`. A fresh database is empty until you run them:
+
+```bash
+cd backend
+uv run alembic upgrade head          # create or update the tables
+uv run python -m app.seed            # two demo tenants with a mock source each (safe to rerun)
+
+# With the Docker stack running instead:
+docker compose exec backend alembic upgrade head
+docker compose exec backend python -m app.seed
+```
+
+After changing a model, generate a migration, read it, and adjust it before committing:
+
+```bash
+uv run alembic revision --autogenerate -m "describe the change"
+uv run alembic downgrade -1          # undo the last migration
+```
+
+CI fails when the models and the migrations disagree (`alembic check` in `tests/integration/test_migrations.py`).
+
 ## Code style
 
 | Area                    | Linter | Formatter | Config                                  |
