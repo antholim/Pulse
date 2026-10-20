@@ -4,7 +4,7 @@ from synthetic.omerlo_fixtures import TENANTS
 
 def test_demo_tenants_match_the_synthetic_fixtures():
     assert [(t.omerlo_media_id, t.name) for t in DEMO_TENANTS] == [
-        (t.media_id, t.name) for t in TENANTS
+        (t.slug, t.name) for t in TENANTS
     ]
 
 
