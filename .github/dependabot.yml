@@ -12,7 +12,7 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    labels: ["dependencies", "team: infra-security"]
+    labels: ["team: infra-security"]
     groups:
       github-actions:
         patterns: ["*"]
@@ -21,7 +21,7 @@ updates:
     directory: /backend
     schedule:
       interval: monthly
-    labels: ["dependencies", "team: infra-security"]
+    labels: ["team: infra-security"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -33,7 +33,7 @@ updates:
     directory: /frontend
     schedule:
       interval: monthly
-    labels: ["dependencies", "team: infra-security"]
+    labels: ["team: infra-security"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -45,7 +45,7 @@ updates:
     directories: [/backend, /frontend, /discord-bots/team-bot]
     schedule:
       interval: monthly
-    labels: ["dependencies", "team: infra-security"]
+    labels: ["team: infra-security"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
