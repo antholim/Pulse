@@ -143,17 +143,63 @@ def test_person_variants_share_a_key(left, right):
 
 
 @pytest.mark.parametrize(
-    ("function", "args"),
+    ("raw", "expected"),
     [
-        (normalize_domain, (None,)),
-        (normalize_domain, ("https://www.exemple.qc.ca",)),
-        (normalize_linkedin, (None,)),
-        (normalize_email, (None,)),
-        (email_domain, (None,)),
+        (None, None),
+        ("", None),
+        ("not-a-domain", None),
+        ("user@exemple.qc.ca", None),
+        ("exemple.qc.ca", "exemple.qc.ca"),
+        ("https://www.boutique.exemple.qc.ca/a-propos", "exemple.qc.ca"),
+        ("HTTPS://WWW.Exemple.QC.CA/path?q=1", "exemple.qc.ca"),
+        ("www.acme.io", "acme.io"),
+        ("https://forums.bbc.co.uk/news", "bbc.co.uk"),
     ],
 )
-def test_remaining_normalizer_stubs_return_none(function, args):
-    assert function(*args) is None
+def test_normalize_domain(raw, expected):
+    assert normalize_domain(raw) == expected
+
+
+def test_domain_extractor_never_fetches():
+    assert norm._domain_extractor().suffix_list_urls == ()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("https://example.com/company/acme", None),
+        ("example.com/company/acme", None),
+        ("https://www.linkedin.com/company/acme-tech/", "company/acme-tech"),
+        ("https://www.linkedin.com/company/acme-tech?utm=1", "company/acme-tech"),
+        ("https://fr.linkedin.com/in/marie-eve-tremblay/", "in/marie-eve-tremblay"),
+        ("https://ca.linkedin.com/in/Marie-Eve", "in/marie-eve"),
+        ("linkedin.com/company/acme", "company/acme"),
+        ("/fr/company/acme", "company/acme"),
+        ("company/acme", "company/acme"),
+        ("in/marie-eve", "in/marie-eve"),
+    ],
+)
+def test_normalize_linkedin(raw, expected):
+    assert normalize_linkedin(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_email", "expected_domain"),
+    [
+        (None, None, None),
+        ("", None, None),
+        ("not-an-email", None, None),
+        ("a@b", None, None),
+        ("info@exemple.qc.ca", "info@exemple.qc.ca", "exemple.qc.ca"),
+        ("  Info@Exemple.QC.CA  ", "info@exemple.qc.ca", "exemple.qc.ca"),
+        ("a b@exemple.qc.ca", None, None),
+    ],
+)
+def test_normalize_email_and_domain(raw, expected_email, expected_domain):
+    assert normalize_email(raw) == expected_email
+    assert email_domain(raw) == expected_domain
 
 
 def test_phone_stub_returns_empty_result():

@@ -15,12 +15,17 @@ import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
+
+import tldextract
 
 # Default region for numbers without a country code (wiki + #26 AC).
 DEFAULT_PHONE_REGION = "CA"
 
-# Hosts treated as LinkedIn when normalizing profile URLs.
+# Apex host for LinkedIn; country subdomains like fr.linkedin.com also match.
+LINKEDIN_APEX_HOST = "linkedin.com"
 LINKEDIN_HOSTS = frozenset({"linkedin.com", "www.linkedin.com"})
+LINKEDIN_PROFILE_KINDS = frozenset({"company", "in"})
 
 # Ampersand / conjunction variants collapsed to one token for org-name keys.
 CONNECTOR_TOKEN = "and"
@@ -159,24 +164,87 @@ def normalize_person_name(value: str | None) -> str | None:
     return spaced or None
 
 
+@lru_cache(maxsize=1)
+def _domain_extractor() -> tldextract.TLDExtract:
+    """Public-suffix extractor that never fetches (bundled snapshot only)."""
+    return tldextract.TLDExtract(suffix_list_urls=())
+
+
 def normalize_domain(value: str | None) -> str | None:
     """Return the registered domain for a URL or host, or None if unusable."""
+    raw = _blank_to_none(value)
+    if raw is None or "@" in raw:
+        # Emails are handled by normalize_email / email_domain, not here.
+        return None
+    extracted = _domain_extractor()(raw.strip().lower())
+    domain = extracted.top_domain_under_public_suffix
+    return domain.lower() if domain else None
+
+
+def _is_linkedin_host(host: str) -> bool:
+    host = host.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host == LINKEDIN_APEX_HOST or host.endswith(f".{LINKEDIN_APEX_HOST}")
+
+
+def _linkedin_from_path(path: str) -> str | None:
+    """Pull ``company/<slug>`` or ``in/<slug>`` from a URL path."""
+    parts = [part for part in path.split("/") if part]
+    for index, part in enumerate(parts):
+        if part in LINKEDIN_PROFILE_KINDS and index + 1 < len(parts):
+            slug = parts[index + 1].strip().lower()
+            if slug:
+                return f"{part}/{slug}"
     return None
 
 
 def normalize_linkedin(value: str | None) -> str | None:
     """Return ``company/<slug>`` or ``in/<slug>``, or None if unusable."""
-    return None
+    raw = _blank_to_none(value)
+    if raw is None:
+        return None
+    lowered = raw.strip().lower()
+    if "://" in lowered or lowered.startswith("//"):
+        parsed = urlparse(lowered if "://" in lowered else f"https:{lowered}")
+        host = parsed.hostname or ""
+        if not _is_linkedin_host(host):
+            return None
+        return _linkedin_from_path(parsed.path)
+
+    # Host without scheme: ``linkedin.com/company/acme`` (reject other hosts).
+    parsed = urlparse(f"https://{lowered}")
+    host = parsed.hostname or ""
+    if host and "." in host:
+        if not _is_linkedin_host(host):
+            return None
+        return _linkedin_from_path(parsed.path)
+
+    # Path-only inputs such as ``/fr/company/acme`` or ``company/acme``.
+    path = lowered if lowered.startswith("/") else f"/{lowered}"
+    return _linkedin_from_path(path)
 
 
 def normalize_email(value: str | None) -> str | None:
     """Return a lowercased email address, or None if unusable."""
-    return None
+    raw = _blank_to_none(value)
+    if raw is None:
+        return None
+    email = raw.strip().lower()
+    if email.count("@") != 1 or any(char.isspace() for char in email):
+        return None
+    local, _, domain = email.partition("@")
+    if not local or not domain or "." not in domain:
+        return None
+    return email
 
 
 def email_domain(value: str | None) -> str | None:
     """Return the domain part of an email, or None if unusable."""
-    return None
+    email = normalize_email(value)
+    if email is None:
+        return None
+    return email.partition("@")[2]
 
 
 def normalize_phone(value: str | None) -> PhoneResult:
