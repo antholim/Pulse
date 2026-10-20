@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "agent-detector==2.0.0",
+    "alembic==1.20.0",
     "annotated-doc==0.0.5",
     "annotated-types==0.8.0",
     "anyio==4.15.1",
@@ -37,6 +38,7 @@ dependencies = [
     "opentelemetry-sdk==1.45.1",
     "opentelemetry-semantic-conventions==0.66b1",
     "packaging==26.3",
+    "phonenumbers==9.0.41",
     "pluggy==1.7.0",
     "protobuf==7.36.2",
     "psycopg[binary]>=3.3.6",
@@ -56,6 +58,8 @@ dependencies = [
     "shellingham==1.5.4",
     "sqlalchemy>=2.1.5",
     "starlette==1.8.0",
+    "structlog>=26.1.0",
+    "tldextract==5.4.0",
     "typer==0.27.3",
     "typing-extensions==4.16.0",
     "typing-inspection==0.4.4",
@@ -86,7 +90,12 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+# Command-line output for whoever runs the generator, not application logging.
+"synthetic/omerlo_fixtures.py" = ["T201"]
+"app/seed.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
