@@ -1,5 +1,5 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { coverageConfigDefaults, defineConfig } from "vitest/config";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,6 +11,8 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/main.tsx", "src/test/**", "src/**/*.test.{ts,tsx}"],
+      // json-summary feeds the coverage table in the CI run summary.
+      reporter: [...coverageConfigDefaults.reporter, "json-summary"],
       // CI fails below this; core logic aims for 80 percent.
       thresholds: { lines: 50, branches: 50, functions: 50, statements: 50 },
     },

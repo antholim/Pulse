@@ -92,7 +92,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 known-first-party = ["app"]
 
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "synthetic"]
 branch = true
 
 [tool.coverage.report]
