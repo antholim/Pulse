@@ -51,11 +51,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Defaults point at the mock-omerlo service; set OMERLO_* in .env to use staging.
-      OMERLO_BASE_URL: ${OMERLO_BASE_URL:-http://mock-omerlo:8100}
-      OMERLO_TOKEN_URL: ${OMERLO_TOKEN_URL:-http://mock-omerlo:8100/oauth/token}
-      OMERLO_CLIENT_ID: ${OMERLO_CLIENT_ID:-mock-client}
-      OMERLO_CLIENT_SECRET: ${OMERLO_CLIENT_SECRET:-mock-secret}
-      OMERLO_MEDIA_ID: ${OMERLO_MEDIA_ID:-demo-capitale}
+      OMERLO_BASE_URL: ${OMERLO_BASE_URL:-http://mock-omerlo:8100/api}
+      OMERLO_API_KEY: ${OMERLO_API_KEY:-mock-demo-capitale}
     depends_on:
       db:
         condition: service_healthy
@@ -70,7 +67,7 @@ services:
       - "8000"
       - --reload
 
-  # Mock Omerlo Reader API serving synthetic data (backend/synthetic/README.md)
+  # Mock Omerlo backoffice API serving synthetic data (backend/synthetic/README.md)
   mock-omerlo:
     profiles: ["full", "mock"]
     build:
