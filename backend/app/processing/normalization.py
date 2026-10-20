@@ -15,7 +15,7 @@ import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import phonenumbers
 import tldextract
@@ -36,8 +36,6 @@ PHONE_WARNING_IMPOSSIBLE = "impossible"
 LINKEDIN_APEX_HOST = "linkedin.com"
 LINKEDIN_HOSTS = frozenset({"linkedin.com", "www.linkedin.com"})
 LINKEDIN_PROFILE_KINDS = frozenset({"company", "in"})
-# LinkedIn vanity slugs are lowercase alnum / hyphen in practice.
-_LINKEDIN_SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
 
 # Ampersand / conjunction variants collapsed to one token for org-name keys.
 CONNECTOR_TOKEN = "and"
@@ -202,6 +200,24 @@ def _is_linkedin_host(host: str) -> bool:
     return host == LINKEDIN_APEX_HOST or host.endswith(f".{LINKEDIN_APEX_HOST}")
 
 
+def _normalize_linkedin_slug(raw_slug: str) -> str | None:
+    """Decode and validate a LinkedIn vanity slug.
+
+    Accepts Unicode letters (including accents), digits and hyphens. Percent-
+    encoded slugs such as ``marie-%C3%A8ve`` become ``marie-ève``.
+    """
+    slug = unquote(raw_slug.strip()).casefold()
+    if (
+        not slug
+        or slug.startswith("-")
+        or slug.endswith("-")
+        or any(char.isspace() for char in slug)
+        or not all(char == "-" or char.isalnum() for char in slug)
+    ):
+        return None
+    return slug
+
+
 def _linkedin_from_path(path: str) -> str | None:
     """Pull ``company/<slug>`` or ``in/<slug>`` from a URL path."""
     # Defense in depth: path-only callers may still pass query/fragment junk.
@@ -209,8 +225,8 @@ def _linkedin_from_path(path: str) -> str | None:
     parts = [part for part in path.split("/") if part]
     for index, part in enumerate(parts):
         if part in LINKEDIN_PROFILE_KINDS and index + 1 < len(parts):
-            slug = parts[index + 1].strip().lower()
-            if _LINKEDIN_SLUG.fullmatch(slug):
+            slug = _normalize_linkedin_slug(parts[index + 1])
+            if slug:
                 return f"{part}/{slug}"
     return None
 

@@ -186,8 +186,12 @@ def test_domain_extractor_never_fetches():
         ("company/acme#section", "company/acme"),
         ("/fr/company/acme?trk=1#x", "company/acme"),
         ("in/marie-eve", "in/marie-eve"),
+        ("in/marie-ève", "in/marie-ève"),
+        ("https://www.linkedin.com/in/marie-%C3%A8ve/", "in/marie-ève"),
+        ("in/marie-%c3%a8ve", "in/marie-ève"),
         ("company/acme!bad", None),
         ("in/not a slug", None),
+        ("in/marie%20eve", None),
     ],
 )
 def test_normalize_linkedin(raw, expected):
