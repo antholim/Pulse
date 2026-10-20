@@ -122,8 +122,9 @@ def create_app(
 ) -> FastAPI:
     settings = settings or MockSettings()
     by_media_id = {t.tenant.media_id: t for t in tenants}
-    tokens: dict[str, float] = {}
+    tokens: dict[str, float] = {}  # access token -> expiry
     app = FastAPI(title="Mock Omerlo Reader API", description="Serves synthetic data only.")
+    app.state.tokens = tokens
 
     @app.post(TOKEN_PATH)
     def issue_token(
@@ -142,8 +143,11 @@ def create_app(
         )
         if not valid:
             return JSONResponse({"error": "invalid_client"}, status_code=401)
+        now = clock()
+        for expired in [t for t, expiry in tokens.items() if expiry <= now]:
+            del tokens[expired]
         access_token = secrets.token_urlsafe(24)
-        tokens[access_token] = clock() + settings.token_ttl_seconds
+        tokens[access_token] = now + settings.token_ttl_seconds
         return {
             "access_token": access_token,
             "token_type": "Bearer",
@@ -151,9 +155,16 @@ def create_app(
         }
 
     def current_tenant(request: Request) -> TenantData:
+        # RFC 6750 section 3: say which scheme is expected, and why a token was refused.
         scheme, _, token = request.headers.get("authorization", "").partition(" ")
-        if scheme.lower() != "bearer" or tokens.get(token, 0) <= clock():
-            raise HTTPException(401, "Missing, invalid or expired bearer token")
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(401, "Missing bearer token", headers={"WWW-Authenticate": "Bearer"})
+        if tokens.get(token, 0) <= clock():
+            raise HTTPException(
+                401,
+                "Invalid or expired bearer token",
+                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+            )
         media_id = request.headers.get("x-omerlo-media-id")
         if not media_id:
             raise HTTPException(400, "The x-omerlo-media-id header is required")

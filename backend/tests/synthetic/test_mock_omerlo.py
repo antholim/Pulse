@@ -97,6 +97,27 @@ def test_expired_tokens_get_401(mock_omerlo, headers, clock):
     assert mock_omerlo.get(ORGS, headers=headers).status_code == 401
 
 
+def test_401s_say_which_scheme_is_expected(mock_omerlo, headers, clock):
+    no_token = {k: v for k, v in headers.items() if k != "Authorization"}
+    assert mock_omerlo.get(ORGS, headers=no_token).headers["WWW-Authenticate"] == "Bearer"
+
+    clock.now += SETTINGS.token_ttl_seconds
+    expired = mock_omerlo.get(ORGS, headers=headers)
+    assert expired.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
+
+
+def test_expired_tokens_are_dropped_when_new_ones_are_issued(mock_omerlo, token, clock):
+    clock.now += SETTINGS.token_ttl_seconds
+    mock_omerlo.post(
+        TOKEN_PATH,
+        data={"grant_type": "client_credentials"},
+        auth=(SETTINGS.client_id, SETTINGS.client_secret),
+    )
+
+    assert token not in mock_omerlo.app.state.tokens
+    assert len(mock_omerlo.app.state.tokens) == 1
+
+
 def test_media_id_header_is_required_and_must_exist(mock_omerlo, headers):
     missing = {k: v for k, v in headers.items() if k != "x-omerlo-media-id"}
 
