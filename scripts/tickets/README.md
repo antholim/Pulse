@@ -41,7 +41,16 @@ Change the ticket in `data.py` and re-run. The script only overwrites a body it 
 
 If someone edited an issue on GitHub (ticked a checkbox, added notes), the script detects it and **skips** that issue instead of erasing the edit. To update it again, copy the GitHub changes into `data.py`. Once the rendered body matches GitHub, the next `--apply` adopts it and later changes flow through again.
 
-Titles, labels, milestones and assignees are only set when an issue is created. Change those on GitHub directly.
+Titles, milestones (from `iteration`) and labels are synced too, with the same protection:
+
+- A title or milestone is only changed if GitHub still shows the value the script last wrote (kept under `meta` in `state.json`). If someone changed it by hand, or the script never recorded it ("not tracked yet"), the dry run reports it and `--apply` skips it. Either copy the GitHub value into `data.py`, or run `python build.py --apply --overwrite S1-09` (comma-separated keys, `--overwrite=S1-09` works too) to apply the value from `data.py`.
+- Labels listed in `data.py` are added. A label is only removed if the script added it and `data.py` no longer lists it, so labels added by hand are never touched, even when `data.py` lists them too.
+
+Run `python build.py --help` for all options.
+
+For backlog changes, merge the `data.py` change first and run `--apply` from `main`, so the review happens before anything changes on GitHub.
+
+Assignees are never set by the script.
 
 ## Writing style
 

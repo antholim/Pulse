@@ -3,11 +3,15 @@
     python build.py           dry run: render bodies to out/, validate, and
                               show what --apply would create or update
     python build.py --apply   create labels and missing issues, update changed
-                              bodies, link issues to their parent epics
+                              bodies, titles, milestones and labels, link
+                              issues to their parent epics
+    --overwrite S1-09,S1-10   also apply data.py's title and milestone to these
+                              keys when GitHub shows a different value
 
-See README.md for details.
+See README.md for details, or run with --help.
 """
 
+import argparse
 import hashlib
 import json
 import re
@@ -146,6 +150,8 @@ def render_epic(e, numbers):
     children = [i for i in ISSUES if i["epic"] == e["key"]]
     prio = next((p for p in ("must", "should", "could") if p in e["labels"]), None)
     lines = ["## Goal", e["goal"], ""]
+    if e.get("status"):
+        lines += ["## Status", e["status"], ""]
     lines += ["## Scope"] + [f"- {s}" for s in e["scope"]] + [""]
     lines += [
         "## Priority",
@@ -245,7 +251,7 @@ def digest(body):
 
 def load_state():
     state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
-    for k, v in (("numbers", {}), ("linked", []), ("hashes", {})):
+    for k, v in (("numbers", {}), ("linked", []), ("hashes", {}), ("meta", {})):
         state.setdefault(k, v)
     return state
 
@@ -254,7 +260,7 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
 
 
-def remote_bodies():
+def remote_issues():
     raw = gh(
         "issue",
         "list",
@@ -265,9 +271,17 @@ def remote_bodies():
         "--limit",
         "1000",
         "--json",
-        "number,body",
+        "number,body,title,milestone,labels",
     )
-    return {i["number"]: i["body"] or "" for i in json.loads(raw)}
+    return {
+        i["number"]: {
+            "body": i["body"] or "",
+            "title": i["title"],
+            "milestone": (i["milestone"] or {}).get("title"),
+            "labels": [label["name"] for label in i["labels"]],
+        }
+        for i in json.loads(raw)
+    }
 
 
 def plan_updates(state, remote, created_now=()):
@@ -282,7 +296,7 @@ def plan_updates(state, remote, created_now=()):
         key = t["key"]
         if key not in numbers:
             continue
-        current = remote.get(numbers[key], "")
+        current = remote.get(numbers[key], {}).get("body", "")
         wanted = render(t, numbers)
         if normalize(current) == normalize(wanted):
             state["hashes"][key] = digest(current)
@@ -294,6 +308,89 @@ def plan_updates(state, remote, created_now=()):
     return to_update, edited
 
 
+def meta_of(t):
+    return {
+        "title": t["title"],
+        "milestone": None if is_epic(t) else milestone(t),
+        "labels": sorted(labels_for(t)),
+    }
+
+
+def plan_meta(state, remote, overwrite=()):
+    """Plan title, milestone and label changes as (changes, skipped).
+
+    state["meta"] holds what the script last wrote. A title or milestone is only
+    changed if GitHub still shows that value (nobody edited it by hand), or the
+    key is listed in `overwrite`. Each skipped entry is (ticket, field, GitHub value,
+    data.py value, tracked); `tracked` is False when the script never recorded the
+    field (issues created before it tracked titles and milestones).
+
+    Labels from data.py are added; a label is only removed if the script added it
+    and data.py no longer lists it, so labels people add by hand are never touched.
+    """
+    numbers = state["numbers"]
+    changes, edited = [], []
+    for t in EPICS + ISSUES:
+        key = t["key"]
+        if key not in numbers or numbers[key] not in remote:
+            continue
+        current, wanted = remote[numbers[key]], meta_of(t)
+        base = state["meta"].get(key, {})
+        edit = {}
+        for field in ("title", "milestone"):
+            if current[field] == wanted[field]:
+                continue
+            if current[field] == base.get(field) or key in overwrite:
+                edit[field] = wanted[field]
+            else:
+                tracked = key in state["meta"]
+                edited.append((t, field, current[field], wanted[field], tracked))
+        add = sorted(set(wanted["labels"]) - set(current["labels"]))
+        remove = sorted(
+            (set(base.get("labels", [])) - set(wanted["labels"])) & set(current["labels"])
+        )
+        if add:
+            edit["add"] = add
+        if remove:
+            edit["remove"] = remove
+        if edit:
+            changes.append((t, edit))
+    return changes, edited
+
+
+def record_meta(state, t, remote_entry=None, edit=None):
+    """Remember the title, milestone and labels the script is responsible for."""
+    wanted, base = meta_of(t), state["meta"].get(t["key"], {})
+    entry = {}
+    for field in ("title", "milestone"):
+        settled = (
+            remote_entry is None or remote_entry[field] == wanted[field] or field in (edit or {})
+        )
+        entry[field] = wanted[field] if settled else base.get(field)
+    if remote_entry is None:
+        # Just created by the script, so it set every label.
+        entry["labels"] = wanted["labels"]
+    else:
+        # Only labels the script wrote before or adds now; a label someone added by hand
+        # stays theirs even if data.py also lists it.
+        kept = set(base.get("labels", [])) & set(wanted["labels"])
+        entry["labels"] = sorted(kept | set((edit or {}).get("add", [])))
+    state["meta"][t["key"]] = entry
+
+
+def describe(edit):
+    parts = []
+    if "title" in edit:
+        parts.append(f"title -> {edit['title']!r}")
+    if "milestone" in edit:
+        parts.append(f"milestone -> {edit['milestone']}")
+    if edit.get("add"):
+        parts.append("add labels " + ", ".join(edit["add"]))
+    if edit.get("remove"):
+        parts.append("remove labels " + ", ".join(edit["remove"]))
+    return "; ".join(parts)
+
+
 def write_body(t, body):
     OUT.mkdir(exist_ok=True)
     path = OUT / f"{t['key']}.md"
@@ -301,13 +398,15 @@ def write_body(t, body):
     return path
 
 
-def dry_run():
+def dry_run(overwrite=()):
     state = load_state()
     numbers = state["numbers"]
     existing = gh(
         "label", "list", "--repo", REPO, "--limit", "500", "--json", "name", "--jq", ".[].name"
     ).splitlines()
     problems = validate(existing)
+    unknown = [k for k in overwrite if k not in ALL_BY_KEY]
+    problems += [f"--overwrite: unknown key {k}" for k in unknown]
 
     for t in EPICS + ISSUES:
         body = render(t, numbers)
@@ -318,23 +417,42 @@ def dry_run():
     print(f"Rendered {len(EPICS)} epics and {len(ISSUES)} issues to {OUT}")
     print("\n".join(problems) if problems else "Validation: OK")
 
+    remote = remote_issues()
     new = [t["key"] for t in EPICS + ISSUES if t["key"] not in numbers]
-    to_update, edited = plan_updates(state, remote_bodies())
+    to_update, edited = plan_updates(state, remote)
     updates = [f"{t['key']} (#{numbers[t['key']]})" for t in to_update]
     print("\n--apply would create: " + (", ".join(new) or "nothing"))
-    print("--apply would update: " + (", ".join(updates) or "nothing"))
+    print("--apply would update bodies: " + (", ".join(updates) or "nothing"))
     if edited:
-        print("Edited on GitHub since the last run, so they will be SKIPPED:")
+        print("Bodies edited on GitHub since the last run, so they will be SKIPPED:")
         for t in edited:
             print(
                 f"  {t['key']} (#{numbers[t['key']]}): copy the GitHub changes into data.py; "
                 "once the rendered body matches GitHub, the next --apply adopts it again"
             )
+
+    changes, meta_edited = plan_meta(state, remote, overwrite)
+    print("--apply would change titles, milestones or labels:" + ("" if changes else " nothing"))
+    for t, edit in changes:
+        print(f"  {t['key']} (#{numbers[t['key']]}): {describe(edit)}")
+    for tracked, heading in (
+        (True, "Changed on GitHub by hand, so they will be SKIPPED:"),
+        (False, "Not tracked by the script yet, so they will be SKIPPED:"),
+    ):
+        skipped = [s for s in meta_edited if s[4] is tracked]
+        if skipped:
+            print(heading)
+        for t, field, current, wanted, _ in skipped:
+            print(
+                f"  {t['key']} (#{numbers[t['key']]}) {field}: GitHub has {current!r}, "
+                f"data.py has {wanted!r}. Update data.py to keep GitHub's value, "
+                f"or pass --overwrite {t['key']} to adopt data.py's"
+            )
     return not problems
 
 
-def apply():
-    if not dry_run():
+def apply(overwrite=()):
+    if not dry_run(overwrite):
         sys.exit("Fix the validation problems above first.")
     state = load_state()
     numbers = state["numbers"]
@@ -375,12 +493,14 @@ def apply():
             args += ["--milestone", milestone(t)]
         url = gh(*args)
         numbers[t["key"]] = int(url.rstrip("/").split("/")[-1])
+        record_meta(state, t)
         created_now.append(t["key"])
         save_state(state)
         print(f"  {t['key']} -> #{numbers[t['key']]}")
 
     print("Updating bodies...")
-    to_update, edited = plan_updates(state, remote_bodies(), created_now)
+    remote = remote_issues()
+    to_update, edited = plan_updates(state, remote, created_now)
     save_state(state)
     for t in to_update:
         body = render(t, numbers)
@@ -397,7 +517,32 @@ def apply():
         save_state(state)
         print(f"  updated {t['key']} (#{numbers[t['key']]})")
     for t in edited:
-        print(f"  SKIPPED {t['key']} (#{numbers[t['key']]}): edited on GitHub")
+        print(f"  SKIPPED {t['key']} (#{numbers[t['key']]}): body edited on GitHub")
+
+    print("Updating titles, milestones and labels...")
+    changes, meta_edited = plan_meta(state, remote, overwrite)
+    changed = {t["key"]: edit for t, edit in changes}
+    for t, edit in changes:
+        args = ["issue", "edit", str(numbers[t["key"]]), "--repo", REPO]
+        if "title" in edit:
+            args += ["--title", edit["title"]]
+        if "milestone" in edit:
+            args += (
+                ["--milestone", edit["milestone"]] if edit["milestone"] else ["--remove-milestone"]
+            )
+        for label in edit.get("add", []):
+            args += ["--add-label", label]
+        for label in edit.get("remove", []):
+            args += ["--remove-label", label]
+        gh(*args)
+        print(f"  {t['key']} (#{numbers[t['key']]}): {describe(edit)}")
+    for t in EPICS + ISSUES:
+        if t["key"] in numbers and t["key"] not in created_now and numbers[t["key"]] in remote:
+            record_meta(state, t, remote[numbers[t["key"]]], changed.get(t["key"]))
+    save_state(state)
+    for t, field, _, _, tracked in meta_edited:
+        reason = "changed on GitHub by hand" if tracked else "not tracked by the script yet"
+        print(f"  SKIPPED {t['key']} (#{numbers[t['key']]}) {field}: {reason}")
 
     print("Linking issues to their epics...")
     for i in ISSUES:
@@ -420,5 +565,28 @@ def apply():
     print("Done.")
 
 
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Render, create and update the PULSE GitHub tickets defined in data.py. "
+        "Without --apply, only a dry run: nothing changes on GitHub."
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="create labels and missing issues, update bodies, titles, milestones and labels",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="extend",
+        default=[],
+        metavar="KEYS",
+        type=lambda value: [k.strip() for k in value.split(",") if k.strip()],
+        help="comma-separated keys (e.g. S1-09,S1-10) whose title and milestone data.py "
+        "should set even when GitHub shows a different value; may be repeated",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    apply() if "--apply" in sys.argv else dry_run()
+    args = parse_args()
+    (apply if args.apply else dry_run)(tuple(args.overwrite))

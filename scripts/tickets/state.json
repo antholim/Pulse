@@ -42,7 +42,26 @@
     "S1-27": 41,
     "S1-28": 42,
     "S1-29": 44,
-    "S1-30": 45
+    "S1-30": 45,
+    "S1-31": 50,
+    "S1-32": 51,
+    "S1-33": 52,
+    "S1-34": 53,
+    "S1-35": 54,
+    "S1-36": 55,
+    "S1-37": 56,
+    "S1-38": 57,
+    "S1-39": 58,
+    "S1-40": 59,
+    "S1-41": 60,
+    "S1-42": 61,
+    "S1-43": 62,
+    "S1-44": 63,
+    "S1-45": 64,
+    "S1-46": 65,
+    "S1-47": 66,
+    "S1-48": 67,
+    "S1-49": 68
   },
   "linked": [
     "S1-01",
@@ -74,51 +93,726 @@
     "S1-27",
     "S1-28",
     "S1-29",
-    "S1-30"
+    "S1-30",
+    "S1-31",
+    "S1-32",
+    "S1-33",
+    "S1-34",
+    "S1-35",
+    "S1-36",
+    "S1-37",
+    "S1-38",
+    "S1-39",
+    "S1-40",
+    "S1-41",
+    "S1-42",
+    "S1-43",
+    "S1-44",
+    "S1-45",
+    "S1-46",
+    "S1-47",
+    "S1-48",
+    "S1-49"
   ],
   "hashes": {
-    "E1": "a3b7009c365831b2669ba008940d0cfde17c8753e474c21e140d7d06a129c34d",
-    "E2": "4459465920f8a978168ff5f27dac34e38c3df7bf16941bcff51e7fe0a94b883d",
-    "E3": "09f394e11d30cb27b54acb031ba940589c310076fedddb8ea0678bc28ac5f891",
-    "E4": "0ebbba00425e91e18a9f4fda6846d7f8ea558d0183242e38ad1024bbba79ce8d",
-    "E5": "58fc32ce9f20e71f8a9deaf2adf66cf2cf3b39992b274064e8af0b4e5ab3453d",
-    "E6": "780641c1bf8c031d439a805f0b7ba92bc499e47ca1195df532a141a050499863",
-    "E7": "83d2432c078f133d4158be42e95b5638c2a08e691f43d7445bc3a03aae2f7eea",
-    "E8": "eacc170445c222ca8fd7cac9d525506573c95fcbcaa8a364f12711929e6044fd",
-    "E9": "1e62b7493fe9b552f5b5e78a2cf414e409a1ab38170a58890436ee3c54fa26d2",
-    "E10": "ee00ba53030165baab30d56a41cb3ccc174aad00b1a35a196bf5a96b94ad2a59",
-    "E11": "c105304d16932e775955bcfa25fd11cb4bc923cefa9be4a52bcf64274c011f8a",
-    "E12": "e446309f6c092cccc1967ab6ead6d945eadda2b4f6c864f61b202409d3b01e74",
-    "E13": "763d366b402c2561582d79739d55fca5d3b6a2b718818a1fcb5afc3b3a950f93",
-    "S1-01": "81dc3b8da014b111b975050ffaa52c043e75b01c12e8312fa0c5d025859a6290",
-    "S1-02": "f02ab8ed09c8ec5a221352297cd5a976dc98c828c313133978f239f6b11dfd0e",
+    "E1": "3f1ea51a0fcf4845e6d965b7826cc4309ab81709bb4886426641467551b4630a",
+    "E2": "a76d513cc5779454f6ef989ac51f89707f0af0c979322917f9ffbbe90f68f638",
+    "E3": "1548c49a4b2317354f279d7ffe50246dc20dc5506702b6db4f2f031077af8071",
+    "E4": "224027d260f61de05fe7328c8c326adad6563cca204c78e1762757dffd7a3dd2",
+    "E5": "1dbdf1b35b585c65bbfe412750244bfbfcdf2a096ee425d8c32b1037c30e17ba",
+    "E6": "7ae6a1e8e23ee0d898ab63ebdcb97e13d749af0974b288a603f29f5aab03fba2",
+    "E7": "ed4f53e1952a56706d81bd808064171c231550fe3f691ed40f61899ef3d7f652",
+    "E8": "c8566d8b216b470afc83355042cff93037d062adf868c7d3b75b8dc53d1b6f33",
+    "E9": "6a10ab5170991d446e82a168254dccb02d29b2521c9acd2fd69136800d2c12f8",
+    "E10": "2dc36c76976be98dd42e1e407b31407ffb502dd405ab576227dc9a51e1ec1193",
+    "E11": "d62f1f5d371076e069b96602165d46b7bec24efea203397c95c863d9a328d76d",
+    "E12": "ec2606b569ee7236a6a1f83e3ee44a06ea0b476b433e8e93cfe34e515d3ea196",
+    "E13": "3fa369884dc16ccefa0db04f19550d338a4246c8f825f0e076bc602e72839f7f",
+    "S1-01": "aa0e849a5f1a5229753e893a4410ae712a926eb6431b5f55c06280a5fb588044",
+    "S1-02": "5979ffee5d0174bf4c2463277167dbdb89bf4cbd5c3b56886695f6cee2c6de0f",
     "S1-03": "e06f6da7afe4c72b20560cdeb490b8a738111f1292a6fd3e8cb6f03210e239a3",
-    "S1-04": "a43627550909915fb3ba650c087e74e41773859b33b81ad7f3b3120029687a4f",
+    "S1-04": "a27b7e2a1159edd19d53013462fa25a34b4ee5780bb72abe1d60c7c319f28983",
     "S1-05": "1beca865efc2f879e2bd595a54c7cc406a36f674db6ca2b83869d100e39aca43",
     "S1-06": "8d268cf1d3c2f11ec34f5843eeb25956f7ac1d803f1ac46fb3dd43c9acfc58e3",
     "S1-07": "2ac68df3bfd4dc7263a4c65f5d8ce5b948d74a89f146bf91239d328c0dd2b829",
-    "S1-08": "7ac21f7b9e9eacb37157615d152700aba7c4899f240d89580a301ba671d9b28b",
-    "S1-09": "bf862a183c7a93180548cda22d95652b212d0f57ebdfbc62bd7b08efa86d66fb",
-    "S1-10": "3eb87f325d03c75b13ed1820c181c6cb83efe6846191b8bddd641b2a7cde096e",
-    "S1-11": "87273130c02e3f18cefa213994148ffe09e996998839634524cf009f711d91e8",
-    "S1-12": "887cddaedee2b0bd67d757b8974a49db19121476cdb748236254116cd2d73ae9",
-    "S1-13": "94dd7cc5779c312dab99880c5d62a2dc7904f23158d04483e05b8efc1f44c58a",
-    "S1-14": "0fe8244e612fa5ecd79903b9fc92c2350d21810c829a965961b222e02d76f4b5",
-    "S1-15": "2fd3152ed31ff677f0fc2a7c2aeffc0877c11cc06608e89f9d0a2488dd678036",
-    "S1-16": "db1b0733b6976cfe8ad28a07ebe20b04f621f48103193b7ca560701bbae5426e",
-    "S1-17": "e525ed740a3264362ef53853deb7c8babe330f19aeed6dacaa15df04fad21eba",
-    "S1-18": "f71c822d9dd53195d20a5c94e7b912202bc3d071af8bb01fe21f9fb73af688b8",
+    "S1-08": "59a62790ed5c68e59f305f8ca8dac5e5261ead67b44b8d366e064c3d4e3f4d48",
+    "S1-09": "a93ce1bcb51d82c6ac1dc94a38ed19f19661fc9d4d0d7eb03f5633faa03c36ce",
+    "S1-10": "cc6d1afd2931a1821354e0ecc6e765eecf4b6d0a35167d983cfa87366d3dcbe3",
+    "S1-11": "c36ce71abf5080d112c7e74c8ac49b12575109234792b7cbe8f2239f3f11f37b",
+    "S1-12": "d529e2d655089d7499d49c2b52ed675bf23182faa6e37d3c92e99ddd6064bf2d",
+    "S1-13": "6c60886f081d2b6103180e1a7fda3824c359295134f5f079e3f4bb50dc1711d1",
+    "S1-14": "5c8a3ee9d8edd4f8b8cc2b2673da6036820284c084e52cd82aa635fd0c7b5dc4",
+    "S1-15": "b2ee2c2273b8ed8a4178ecc680650964292c764b9b3c82f56144742109021949",
+    "S1-16": "43da13cf6be8e4770103748aeafd5fe58b1245e6cee8e1238ea4c63a73f6fd5f",
+    "S1-17": "e0154cedddac59329326fd779ac1d971d398c2377ee9ab1c7c665834f663febb",
+    "S1-18": "39c159b17f75047fb5e59e03feea99f0f1665f2a1bdb5945f3555f87627f58b9",
     "S1-19": "fa6d89171f85692658558474324f714283ddc1db633cc65df8f14db3da37756a",
-    "S1-20": "96f883a4a9dbbd8bb768a8776846f090c669a5e3b95697ff7691d9eba49df39f",
+    "S1-20": "c33b619913216808cfa39c261ee920f139b7d08b690c056b649e2b48f1c6c112",
     "S1-21": "818fd18dc945d5363316e2b299a96b5ecca18a089325037304444507a77c8ad6",
     "S1-22": "e7121c8b398ceeedbc3b1bc7524fc89bd26bd28f642b18437f14df7c3995c43c",
     "S1-23": "25abaf9efe8911dcfafaecbf3dfa375faa81b6d165ee7a80c29eec152f5ed469",
     "S1-24": "a952434d6c73096ae08e970e8a48f6a290eabf9976c99e01fdd3dba7ba8d89bb",
     "S1-25": "ecba832bf8ec17dadaba791aa15f9930912b5666950701924ff21fd750aef73e",
     "S1-26": "3eb0b544d468e3447f239551234e9992d288a8317130241f62d06efb3abce216",
-    "S1-27": "7c9ad6fd7959c5c1b55d1dc5ff0f307570265637fa704aa70032aa0a652b7224",
+    "S1-27": "7fc14f2413d93c990a2aa9e0e8d3ffdd52606ffc0c23f0c66e2689f32ad2fa63",
     "S1-28": "f1e474fe78fe4d70c1b2ada132f2a58960addcd15b81162db3ba2c4fdbf713a1",
     "S1-30": "751ccfc7844fbd5bbf732e88e69876068be1efca1ae3d76258f03c51495170c4",
-    "S1-29": "8e6976d539f9dbb40b1c3bc1d7a042de90942187b9ef1ec5baed268f2526173b"
+    "S1-29": "8e6976d539f9dbb40b1c3bc1d7a042de90942187b9ef1ec5baed268f2526173b",
+    "S1-37": "f6c132ec142efca9841c7461b2fbc5abadf26c6c75c96db30068a1e28fc8f11b",
+    "S1-43": "86cb4a347172a0fbad7f2b56682de137aabec52e1261179af88b20de1be698b5",
+    "S1-44": "10d582ee39298c1c55a681826f3fa27844a60dfebab38f62f30c671cf1d1ed9b",
+    "S1-47": "84b5b8d485880ea82bf0389f679f104b45d2d795612b049ef4c861d27f36cff3",
+    "S1-48": "8db8089d3ccfa4b6bec7628145fa59486a3c3d164e86bd6ed7bd5a429c103e04",
+    "S1-49": "d83a159c694a8932740c8a80690b3d5091dc65bc3bd5bc82137666e83cef7c52",
+    "S1-31": "d758bb264caee216ea83e8fa57d7abda38a34513ec39c7030b69cebc8a330537",
+    "S1-32": "62a429f4858a764bcea540ec557a1103499874ed6e48afd293fb22efa3e6ba1f",
+    "S1-33": "658f8a8969b164d8c389d3ef69350ce100da0636b58e09d741fa7f52b73fdd45",
+    "S1-34": "87b098c1ea1af481c755497b56a1c993cd3fa99dd7a667538aa020dcac3380aa",
+    "S1-35": "a999747e3ac735a9b0a074220d51504de3266a181ef2e511041fdadbcad89439",
+    "S1-36": "138adc8bfa84271f484d637ec1030f2cd0b5b31b1dafe8ae0cbbfe89e372d71f",
+    "S1-38": "ee7f3ecb714a11455b163ae3de4267dbb1fedf90c5a159f1309b9df72bd67c6c",
+    "S1-39": "c55a6ee63440789e946084b5473b67c54956bc5a5b6d3d1b345f39cdeb8bbd75",
+    "S1-40": "bd5b5f60615494532d822a430e2a2990d592618e332fe892676e1233480bad78",
+    "S1-41": "3bc8f7c3594ad5892b7def459102a3fc54367cc7e31571f1a73643541d02f6b4",
+    "S1-42": "1c3e6f7fa4a5e2107a0e84827a59bdd5edcd3e296a4bde11e3666a6659a2d638",
+    "S1-45": "2639844d9f70eb798fe3081438386dd4a589b797ea7798ca0758bf2074150cab",
+    "S1-46": "b879e198b4d2f2a3bbd092566ced3bdcbf5f8d1814886f0a1b361a76054d565c"
+  },
+  "meta": {
+    "E1": {
+      "title": "Epic: Project Foundation & DevOps",
+      "milestone": null,
+      "labels": [
+        "DevOps & CI",
+        "epic",
+        "infra",
+        "must"
+      ]
+    },
+    "E2": {
+      "title": "Epic: COLLECT: Data Connectors & Import",
+      "milestone": null,
+      "labels": [
+        "Data Connectors",
+        "epic",
+        "must"
+      ]
+    },
+    "E3": {
+      "title": "Epic: RESOLVE: Normalization & Entity Resolution",
+      "milestone": null,
+      "labels": [
+        "Entity Resolution",
+        "Manual Match Review",
+        "epic",
+        "must"
+      ]
+    },
+    "E4": {
+      "title": "Epic: ORGANIZE: Unified Data Model & Entity Profiles",
+      "milestone": null,
+      "labels": [
+        "Entity Profiles",
+        "Unified Data Model",
+        "epic",
+        "must"
+      ]
+    },
+    "E5": {
+      "title": "Epic: MONITOR: Synchronization, Historical State & Change Tracking",
+      "milestone": null,
+      "labels": [
+        "Change Tracking",
+        "Historical Timeline",
+        "epic",
+        "must"
+      ]
+    },
+    "E6": {
+      "title": "Epic: COMPARE: Activity Metrics & Trend Detection",
+      "milestone": null,
+      "labels": [
+        "Activity Scoring",
+        "Trend Detection",
+        "epic",
+        "must"
+      ]
+    },
+    "E7": {
+      "title": "Epic: SURFACE: Dashboard, Source & Evidence View, Search",
+      "milestone": null,
+      "labels": [
+        "Dashboard",
+        "Search & Filters",
+        "Source & Evidence View",
+        "epic",
+        "must"
+      ]
+    },
+    "E8": {
+      "title": "Epic: Alerts & Watchlists",
+      "milestone": null,
+      "labels": [
+        "Alerts & Watchlists",
+        "epic",
+        "should"
+      ]
+    },
+    "E9": {
+      "title": "Epic: Security, Users & Administration",
+      "milestone": null,
+      "labels": [
+        "Admin & Configuration",
+        "epic",
+        "security",
+        "should"
+      ]
+    },
+    "E10": {
+      "title": "Epic: Reports & PULSE API",
+      "milestone": null,
+      "labels": [
+        "PULSE API",
+        "Reports",
+        "could",
+        "epic"
+      ]
+    },
+    "E11": {
+      "title": "Epic: Classification, Relationships & Optional AI",
+      "milestone": null,
+      "labels": [
+        "AI Summaries",
+        "Relationship Mapping",
+        "Topic Classification",
+        "could",
+        "epic"
+      ]
+    },
+    "E12": {
+      "title": "Epic: Project Management, Documentation & Professional Practice",
+      "milestone": null,
+      "labels": [
+        "documentation",
+        "epic",
+        "project-mgmt"
+      ]
+    },
+    "E13": {
+      "title": "Epic: Validation, Rollout & User Feedback",
+      "milestone": null,
+      "labels": [
+        "epic",
+        "project-mgmt"
+      ]
+    },
+    "S1-01": {
+      "title": "Select tech stack and justify frameworks and libraries",
+      "milestone": "Iteration 2",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "infra",
+        "must",
+        "spike"
+      ]
+    },
+    "S1-02": {
+      "title": "Set up repository structure and contribution conventions",
+      "milestone": "Iteration 1",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "infra",
+        "must",
+        "task"
+      ]
+    },
+    "S1-03": {
+      "title": "Configure linters, formatters and pre-commit hooks",
+      "milestone": "Iteration 2",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "must",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-04": {
+      "title": "Set up CI pipeline on every push and pull request",
+      "milestone": "Iteration 2",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "must",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-05": {
+      "title": "Containerize the application with Docker Compose",
+      "milestone": "Iteration 2",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "must",
+        "task"
+      ]
+    },
+    "S1-06": {
+      "title": "Add central logging and error handling foundation",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Release 1",
+        "infra",
+        "must",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-07": {
+      "title": "Set up test framework, mocking and coverage tooling",
+      "milestone": "Iteration 2",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "must",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-08": {
+      "title": "Establish security baseline",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "must",
+        "security",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-09": {
+      "title": "Verify Omerlo staging access and API details",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "spike",
+        "team: swe"
+      ]
+    },
+    "S1-10": {
+      "title": "Import companies and people from CSV and JSON files",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "team: swe",
+        "user-story"
+      ]
+    },
+    "S1-11": {
+      "title": "Implement data model v1 with tenant_id on every table",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S1-12": {
+      "title": "Identifier normalization module",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S1-13": {
+      "title": "Browse organizations, their source records and recent changes",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "Source & Evidence View",
+        "must",
+        "team: swe",
+        "user-story"
+      ]
+    },
+    "S1-14": {
+      "title": "Create the architecture and layer diagram",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Release 1",
+        "design",
+        "documentation"
+      ]
+    },
+    "S1-15": {
+      "title": "Create the domain model diagram",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Release 1",
+        "Unified Data Model",
+        "design",
+        "documentation",
+        "team: data-ai"
+      ]
+    },
+    "S1-16": {
+      "title": "Design UI mockups",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Dashboard",
+        "Release 1",
+        "design",
+        "documentation",
+        "team: swe"
+      ]
+    },
+    "S1-17": {
+      "title": "Write personas and the full user story backlog",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt"
+      ]
+    },
+    "S1-18": {
+      "title": "Write the problem statement and risk register",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt"
+      ]
+    },
+    "S1-19": {
+      "title": "Complete the wiki engineering practices pages",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "documentation"
+      ]
+    },
+    "S1-20": {
+      "title": "Review legal, licensing and privacy aspects",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt",
+        "security"
+      ]
+    },
+    "S1-21": {
+      "title": "Write societal impact, ethics and diversity statements",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "documentation"
+      ]
+    },
+    "S1-22": {
+      "title": "Define the business model and estimate project cost",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt"
+      ]
+    },
+    "S1-23": {
+      "title": "Plan Iterations 1 to 4 on a GitHub Project board",
+      "milestone": "Iteration 1",
+      "labels": [
+        "Release 1",
+        "project-mgmt"
+      ]
+    },
+    "S1-24": {
+      "title": "Keep the team charter and stakeholder meeting log",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "project-mgmt"
+      ]
+    },
+    "S1-25": {
+      "title": "Keep a team learning log",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "documentation"
+      ]
+    },
+    "S1-26": {
+      "title": "Define the rollout strategy and user study plan",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt"
+      ]
+    },
+    "S1-27": {
+      "title": "Ship Release 1 (v0.1.0) and collect sponsor feedback",
+      "milestone": "Iteration 4",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "project-mgmt",
+        "task"
+      ]
+    },
+    "S1-28": {
+      "title": "Prepare the Release 1 presentation",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "documentation"
+      ]
+    },
+    "S1-29": {
+      "title": "Build a team Discord bot for work logging, reminders and GitHub notifications",
+      "milestone": "Iteration 2",
+      "labels": [
+        "Release 1",
+        "infra",
+        "project-mgmt",
+        "task"
+      ]
+    },
+    "S1-30": {
+      "title": "Suggest assignees from member profiles and contribution history",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "project-mgmt",
+        "user-story"
+      ]
+    },
+    "S1-31": {
+      "title": "Generate synthetic Omerlo data fixtures",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-32": {
+      "title": "Build a mock Omerlo server that serves the fixtures",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: swe"
+      ]
+    },
+    "S1-33": {
+      "title": "Add a mutation script to simulate changes between syncs",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Change Tracking",
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-34": {
+      "title": "Implement the Omerlo OAuth client credentials client",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: swe"
+      ]
+    },
+    "S1-35": {
+      "title": "Define the connector interface and Omerlo paginated fetchers",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: swe"
+      ]
+    },
+    "S1-36": {
+      "title": "Run incremental Omerlo syncs as recorded sync runs",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Change Tracking",
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: swe"
+      ]
+    },
+    "S1-37": {
+      "title": "Archive raw payloads before transformation",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Data Connectors",
+        "Release 1",
+        "must",
+        "task",
+        "team: swe"
+      ]
+    },
+    "S1-38": {
+      "title": "Map Omerlo payloads to normalized source records",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-39": {
+      "title": "Store source records as versions without overwriting history",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Historical Timeline",
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-40": {
+      "title": "Enforce tenant scoping in data access and prove it in CI",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "Unified Data Model",
+        "must",
+        "security",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-41": {
+      "title": "Detect added, modified and removed records between sync runs",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Change Tracking",
+        "Release 1",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S1-42": {
+      "title": "Match organizations with Tier 1 deterministic rules",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "must",
+        "team: data-ai",
+        "user-story"
+      ]
+    },
+    "S1-43": {
+      "title": "Report Tier 1 accuracy against the synthetic ground truth",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Entity Resolution",
+        "Release 1",
+        "must",
+        "task",
+        "team: data-ai"
+      ]
+    },
+    "S1-44": {
+      "title": "Expose a tenant-scoped REST API for organizations, sync runs and changes",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Release 1",
+        "Source & Evidence View",
+        "must",
+        "task",
+        "team: swe"
+      ]
+    },
+    "S1-45": {
+      "title": "Spike: deploy PULSE to Fly.io",
+      "milestone": "Iteration 3",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "infra",
+        "must",
+        "spike",
+        "team: infra-security"
+      ]
+    },
+    "S1-46": {
+      "title": "Deploy the API, UI and Postgres to Fly.io",
+      "milestone": "Iteration 4",
+      "labels": [
+        "DevOps & CI",
+        "Release 1",
+        "infra",
+        "must",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-47": {
+      "title": "Schedule the Omerlo sync on Fly.io",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Data Connectors",
+        "DevOps & CI",
+        "Release 1",
+        "must",
+        "task",
+        "team: infra-security"
+      ]
+    },
+    "S1-48": {
+      "title": "Prepare the demo for Omerlo's technical team",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt"
+      ]
+    },
+    "S1-49": {
+      "title": "Resolve the open product and data questions with the sponsor",
+      "milestone": "Iteration 3",
+      "labels": [
+        "Release 1",
+        "documentation",
+        "project-mgmt"
+      ]
+    }
   }
 }
