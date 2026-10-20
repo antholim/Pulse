@@ -30,9 +30,9 @@ def test_full_sync_includes_every_record():
     assert is_after(record(datetime(2000, 1, 1, tzinfo=UTC)), None)
 
 
-def test_incremental_sync_keeps_only_newer_records():
+def test_incremental_sync_keeps_newer_records_and_the_boundary():
     assert is_after(record(datetime(2026, 10, 2, tzinfo=UTC)), WATERMARK)
-    assert not is_after(record(WATERMARK), WATERMARK)
+    assert is_after(record(WATERMARK), WATERMARK)
     assert not is_after(record(datetime(2026, 9, 30, tzinfo=UTC)), WATERMARK)
 
 

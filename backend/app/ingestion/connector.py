@@ -27,10 +27,12 @@ class Connector(Protocol):
     kind: str
 
     def fetch_since(self, watermark: datetime | None) -> Iterator[RawRecord]:
-        """Yield the records changed after `watermark`, or every record when it is None.
+        """Yield the records changed at or after `watermark`, or every record when it is None.
 
-        Records without an `updated_at` are always yielded, because whether they
-        changed cannot be told.
+        The bound is inclusive: records sharing the watermark's timestamp (common with
+        second precision) may have been written after the last sync read them, so they
+        are read again; the versioned upsert makes that harmless. Records without an
+        `updated_at` are always yielded, because whether they changed cannot be told.
         """
         ...
 
@@ -51,5 +53,5 @@ def parse_timestamp(value: Any) -> datetime | None:
 
 
 def is_after(record: RawRecord, watermark: datetime | None) -> bool:
-    """Whether `record` belongs in a sync that starts from `watermark`."""
-    return watermark is None or record.updated_at is None or record.updated_at > watermark
+    """Whether `record` belongs in a sync that starts from `watermark` (inclusive)."""
+    return watermark is None or record.updated_at is None or record.updated_at >= watermark
