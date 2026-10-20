@@ -26,7 +26,9 @@ class OrgLink(Base):
     """The decision that a source record version belongs to an organization (#61).
 
     The version is the primary key, so each version belongs to at most one organization.
-    A new version starts unlinked: versioning (#58) must carry the link over to it.
+    A new version starts unlinked: versioning (#58) must copy the link to it in the same
+    transaction that closes the old version. Current membership of an organization joins
+    source_record on valid_to IS NULL.
     """
 
     __tablename__ = "org_link"
@@ -52,11 +54,15 @@ class MatchCandidate(Base):
     """A possible match between two source records, set aside instead of merged (#61).
 
     left_record_id < right_record_id, so each pair is stored once whatever the order.
+    Like OrgLink, a candidate points at versions: versioning (#58) must copy a record's
+    candidates, with their status, to its new version, or an accepted or rejected pair
+    comes back as pending.
     """
 
     __tablename__ = "match_candidate"
     __table_args__ = (
-        # One row per pair, so re-running matching is idempotent; indexes the left side.
+        # One row per pair of versions, so re-matching the same versions is idempotent;
+        # indexes the left side.
         UniqueConstraint("tenant_id", "left_record_id", "right_record_id"),
         same_tenant_fk("left_record_id", "source_record"),
         same_tenant_fk("right_record_id", "source_record"),
