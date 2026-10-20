@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from urllib.parse import parse_qs
 
@@ -281,3 +282,12 @@ def test_settings_load_from_environment(monkeypatch):
     assert loaded.media_id == "media-42"
     assert loaded.client_secret.get_secret_value() == SECRET
     assert SECRET not in repr(loaded)
+
+
+def test_async_clients_are_refused(settings):
+    async def call():
+        async with httpx.AsyncClient(auth=OmerloAuth(settings)) as c:
+            await c.get(CONTENTS_URL)
+
+    with pytest.raises(NotImplementedError, match=r"httpx\.AsyncClient"):
+        asyncio.run(call())
