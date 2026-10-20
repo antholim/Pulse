@@ -126,6 +126,17 @@ def test_event_participants_are_read_for_every_event(client):
 
 
 @respx.mock
+def test_event_participants_can_be_switched_off(client):
+    respx.get(url(ENDPOINTS["event"])).mock(return_value=page([{"id": "e1"}]))
+    participants = respx.get(url(EVENT_PARTICIPANTS.format(id="e1")))
+
+    connector = OmerloConnector(client, entity_kinds=["event"], event_participants=False)
+
+    assert [r.entity_kind for r in connector.fetch_since(None)] == ["event"]
+    assert participants.call_count == 0
+
+
+@respx.mock
 def test_items_without_an_id_are_skipped_and_logged(client, caplog):
     respx.get(url(ENDPOINTS["person"])).mock(
         return_value=page([{"first_name": "Nameless"}, {"id": "p1"}])
