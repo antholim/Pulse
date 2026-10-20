@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import DatabaseNotConfiguredError, check_database
+from app.core.security import SecurityHeadersMiddleware, cors_origins
 
 app = FastAPI(
     title="PULSE API",
@@ -12,11 +13,13 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # QUERY is the new safe, body-carrying read method (IETF draft "The HTTP QUERY Method").
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.get("/api/health")
