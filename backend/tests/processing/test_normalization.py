@@ -8,6 +8,9 @@ from app.processing.normalization import (
     CONNECTOR_TOKEN,
     DEFAULT_PHONE_REGION,
     LINKEDIN_HOSTS,
+    PHONE_WARNING_EMPTY,
+    PHONE_WARNING_IMPOSSIBLE,
+    PHONE_WARNING_UNPARSEABLE,
     PhoneResult,
     email_domain,
     legal_suffixes,
@@ -202,9 +205,43 @@ def test_normalize_email_and_domain(raw, expected_email, expected_domain):
     assert email_domain(raw) == expected_domain
 
 
-def test_phone_stub_returns_empty_result():
-    result = normalize_phone("+1 418 555 0100")
+@pytest.mark.parametrize(
+    ("raw", "expected_e164"),
+    [
+        ("+1 418 555 0100", "+14185550100"),
+        ("+1-418-555-0100", "+14185550100"),
+        ("(418) 555-0100", "+14185550100"),
+        ("4185550100", "+14185550100"),
+        ("514-555-9999", "+15145559999"),
+    ],
+)
+def test_normalize_phone_to_e164(raw, expected_e164):
+    result = normalize_phone(raw)
 
     assert isinstance(result, PhoneResult)
-    assert result.e164 is None
+    assert result.e164 == expected_e164
     assert result.warnings == ()
+
+
+@pytest.mark.parametrize(
+    ("raw", "warning"),
+    [
+        (None, PHONE_WARNING_EMPTY),
+        ("", PHONE_WARNING_EMPTY),
+        ("   ", PHONE_WARNING_EMPTY),
+        ("not-a-phone", PHONE_WARNING_UNPARSEABLE),
+        ("123", PHONE_WARNING_IMPOSSIBLE),
+    ],
+)
+def test_normalize_phone_invalid_returns_warning(raw, warning):
+    result = normalize_phone(raw)
+
+    assert result.e164 is None
+    assert warning in result.warnings
+
+
+def test_normalize_phone_never_raises_on_garbage():
+    result = normalize_phone("++not@@a##phone")
+
+    assert result.e164 is None
+    assert result.warnings

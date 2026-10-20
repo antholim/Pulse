@@ -17,10 +17,17 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
+import phonenumbers
 import tldextract
+from phonenumbers import NumberParseException, PhoneNumberFormat
 
 # Default region for numbers without a country code (wiki + #26 AC).
 DEFAULT_PHONE_REGION = "CA"
+
+# Warning codes returned on PhoneResult when E.164 cannot be produced.
+PHONE_WARNING_EMPTY = "empty"
+PHONE_WARNING_UNPARSEABLE = "unparseable"
+PHONE_WARNING_IMPOSSIBLE = "impossible"
 
 # Apex host for LinkedIn; country subdomains like fr.linkedin.com also match.
 LINKEDIN_APEX_HOST = "linkedin.com"
@@ -248,5 +255,22 @@ def email_domain(value: str | None) -> str | None:
 
 
 def normalize_phone(value: str | None) -> PhoneResult:
-    """Return an E.164 phone number, or null with warnings when invalid."""
-    return PhoneResult(e164=None, warnings=())
+    """Return an E.164 phone number, or null with warnings when invalid.
+
+    Uses ``is_possible_number`` (not ``is_valid_number``) so synthetic 555
+    exchanges still format for fixture tests. Never raises to callers.
+    """
+    raw = _blank_to_none(value)
+    if raw is None:
+        return PhoneResult(e164=None, warnings=(PHONE_WARNING_EMPTY,))
+
+    try:
+        parsed = phonenumbers.parse(raw, DEFAULT_PHONE_REGION)
+    except NumberParseException:
+        return PhoneResult(e164=None, warnings=(PHONE_WARNING_UNPARSEABLE,))
+
+    if not phonenumbers.is_possible_number(parsed):
+        return PhoneResult(e164=None, warnings=(PHONE_WARNING_IMPOSSIBLE,))
+
+    e164 = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+    return PhoneResult(e164=e164, warnings=())
