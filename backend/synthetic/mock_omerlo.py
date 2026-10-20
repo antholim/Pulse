@@ -102,6 +102,19 @@ def paginate(
     return window, meta
 
 
+def basic_credentials(request: Request) -> tuple[str | None, str | None]:
+    """Client id and secret from an `Authorization: Basic` header, or (None, None)."""
+    scheme, _, encoded = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "basic":
+        return None, None
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode()
+    except (binascii.Error, UnicodeDecodeError):
+        return None, None
+    client_id, separator, client_secret = decoded.partition(":")
+    return (client_id, client_secret) if separator else (None, None)
+
+
 def create_app(
     tenants: list[TenantData],
     settings: MockSettings | None = None,
@@ -114,12 +127,16 @@ def create_app(
 
     @app.post(TOKEN_PATH)
     def issue_token(
+        request: Request,
         grant_type: Annotated[str, Form()],
         client_id: Annotated[str | None, Form()] = None,
         client_secret: Annotated[str | None, Form()] = None,
     ):
         if grant_type != "client_credentials":
             return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
+        if client_id is None and client_secret is None:
+            # RFC 6749 section 2.3.1: clients may authenticate with HTTP Basic instead.
+            client_id, client_secret = basic_credentials(request)
         valid = secrets.compare_digest(client_id or "", settings.client_id) and (
             secrets.compare_digest(client_secret or "", settings.client_secret)
         )

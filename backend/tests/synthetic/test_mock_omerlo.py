@@ -37,6 +37,30 @@ def test_token_endpoint_issues_bearer_tokens(mock_omerlo):
     assert body["access_token"]
 
 
+def test_token_endpoint_accepts_http_basic_credentials(mock_omerlo):
+    response = mock_omerlo.post(
+        TOKEN_PATH,
+        data={"grant_type": "client_credentials"},
+        auth=(SETTINGS.client_id, SETTINGS.client_secret),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"]
+
+
+@pytest.mark.parametrize(
+    "authorization", ["Basic d3Jvbmc6Y3JlZHM=", "Basic not-base64!", "Bearer abc"]
+)
+def test_bad_basic_credentials_are_refused(mock_omerlo, authorization):
+    response = mock_omerlo.post(
+        TOKEN_PATH,
+        data={"grant_type": "client_credentials"},
+        headers={"Authorization": authorization},
+    )
+
+    assert response.status_code == 401
+
+
 def test_wrong_credentials_are_refused(mock_omerlo):
     response = mock_omerlo.post(
         TOKEN_PATH,
