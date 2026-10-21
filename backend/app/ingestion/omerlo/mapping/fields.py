@@ -98,7 +98,7 @@ def contact_identifiers(payload: dict[str, Any]) -> dict[str, list[str]]:
 
 
 def cities(payload: dict[str, Any]) -> list[str]:
-    """The normalized city of every address, for the name plus city rule (#61)."""
+    """The normalized city of every address, for the name plus city match."""
     return unique(normalize_text(text(a.get("city"))) for a in live_entries(payload, "address"))
 
 

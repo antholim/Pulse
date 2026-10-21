@@ -1,4 +1,4 @@
-"""Map Omerlo backoffice detail payloads to PULSE source records (#57)."""
+"""Map Omerlo backoffice detail payloads to PULSE source records."""
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace

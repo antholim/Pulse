@@ -1,4 +1,4 @@
-"""Map the raw records of one sync run without letting one bad record stop it (#57)."""
+"""Map the raw records of one sync run without letting one bad record stop it."""
 
 import logging
 from collections.abc import Iterable
