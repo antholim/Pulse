@@ -73,7 +73,20 @@ class OmerloConnector:
         self._event_sessions = event_sessions
 
     def fetch_since(self, watermark: datetime | None) -> Iterator[RawRecord]:
-        workspaces = self._workspaces()
+        workspaces = self.workspaces()
+        yield from self.fetch_reference(workspaces, watermark)
+        for kind in self.community_kinds:
+            for workspace in workspaces:
+                yield from self.fetch_community(kind, workspace["id"], watermark)
+
+    @property
+    def community_kinds(self) -> tuple[str, ...]:
+        return tuple(kind for kind in COMMUNITY if kind in self._entity_kinds)
+
+    def fetch_reference(
+        self, workspaces: list[dict[str, Any]], watermark: datetime | None
+    ) -> Iterator[RawRecord]:
+        """The workspaces and categories changed since `watermark`."""
         if "workspace" in self._entity_kinds:
             for summary in workspaces:
                 record = to_record("workspace", summary)
@@ -84,15 +97,13 @@ class OmerloConnector:
                 record = to_record("category", item)
                 if record and is_after(record, watermark):
                     yield record
-        for kind in (k for k in COMMUNITY if k in self._entity_kinds):
-            for workspace in workspaces:
-                yield from self._community(kind, workspace["id"], watermark)
 
     def _list(self, kind: str, path: str, **params: str) -> Iterator[dict[str, Any]]:
         page_size = self._page_size if kind in SIZED_LISTS else None
         return paginate(self._client, path, page_size=page_size, params=params)
 
-    def _workspaces(self) -> list[dict[str, Any]]:
+    def workspaces(self) -> list[dict[str, Any]]:
+        """The workspace summaries to sync."""
         workspaces = [w for w in self._list("workspace", WORKSPACES) if w.get("id")]
         if self._workspace_ids is None:
             return workspaces
@@ -107,9 +118,10 @@ class OmerloConnector:
         body = get_json(self._client, WORKSPACE_DETAIL.format(id=summary.external_id))
         return detail_record("workspace", body) or summary
 
-    def _community(
+    def fetch_community(
         self, kind: str, workspace_id: str, watermark: datetime | None
     ) -> Iterator[RawRecord]:
+        """One workspace's records of `kind` changed since `watermark`, newest first."""
         path = COMMUNITY_LIST.format(workspace_id=workspace_id, path=COMMUNITY[kind])
         for summary in self._list(kind, path, **NEWEST_FIRST):
             record = to_record(kind, summary)

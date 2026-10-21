@@ -22,8 +22,13 @@ def settings():
 
 
 @pytest.fixture
-def client(settings):
-    with create_omerlo_client(settings) as c:
+def sleeps():
+    return []
+
+
+@pytest.fixture
+def client(settings, sleeps):
+    with create_omerlo_client(settings, sleep=sleeps.append) as c:
         yield c
 
 
@@ -90,6 +95,34 @@ def test_other_errors_are_raised_for_the_sync_run_to_handle(client, status):
 
     with pytest.raises(httpx.HTTPStatusError):
         get_json(client, "/x")
+
+
+@respx.mock
+def test_server_errors_are_retried_with_backoff_before_raising(client, sleeps):
+    # Arrange
+    route = respx.get(f"{BASE_URL}/x").mock(return_value=httpx.Response(503))
+
+    # Act
+    with pytest.raises(httpx.HTTPStatusError):
+        get_json(client, "/x")
+
+    # Assert
+    assert route.call_count == 4
+    assert sleeps == [1.0, 2.0, 4.0]
+
+
+@respx.mock
+def test_a_rejected_key_is_not_retried(client, sleeps):
+    # Arrange
+    route = respx.get(f"{BASE_URL}/x").mock(return_value=httpx.Response(401))
+
+    # Act
+    with pytest.raises(OmerloAuthError):
+        get_json(client, "/x")
+
+    # Assert
+    assert route.call_count == 1
+    assert sleeps == []
 
 
 @respx.mock
