@@ -172,15 +172,23 @@ def normalize_organization_name(value: str | None) -> str | None:
     return " ".join(tokens)
 
 
-def normalize_person_name(value: str | None) -> str | None:
-    """Return a comparison key for a person full name, or None if unusable."""
+def normalize_text(value: str | None) -> str | None:
+    """Return an accent-folded, lowercase, punctuation-free key, or None if unusable.
+
+    Used for titles and cities, which have no legal suffixes to strip.
+    """
     raw = _blank_to_none(value)
     if raw is None:
         return None
-    # Hyphens become spaces so Marie-Ève and Marie Eve share a key.
-    folded = _fold_accents(raw).lower().replace("-", " ")
+    # Punctuation, hyphens included, becomes spaces so Marie-Ève and Marie Eve share a key.
+    folded = _fold_accents(raw).lower()
     spaced = _collapse_whitespace(_NON_ALNUM.sub(" ", folded))
     return spaced or None
+
+
+def normalize_person_name(value: str | None) -> str | None:
+    """Return a comparison key for a person full name, or None if unusable."""
+    return normalize_text(value)
 
 
 @lru_cache(maxsize=1)
@@ -244,7 +252,14 @@ def normalize_linkedin(value: str | None) -> str | None:
     raw = _blank_to_none(value)
     if raw is None:
         return None
-    lowered = raw.lower()
+    try:
+        return _parse_linkedin(raw.lower())
+    except ValueError:
+        # urlsplit rejects malformed hosts such as ``https://[oops``.
+        return None
+
+
+def _parse_linkedin(lowered: str) -> str | None:
     if "://" in lowered or lowered.startswith("//"):
         parsed = urlsplit(lowered if "://" in lowered else f"https:{lowered}")
         host = parsed.hostname or ""
