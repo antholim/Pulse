@@ -155,7 +155,7 @@ def diff_runs(session: Session, run_a: SyncRun, run_b: SyncRun) -> list[Change]:
 def version_ids(session: Session, run: SyncRun) -> dict[str, uuid.UUID]:
     """External id to the id of its version valid at `run`."""
     statement = as_of(run).with_only_columns(SourceRecord.external_id, SourceRecord.id)
-    return dict(session.execute(statement).tuples())
+    return {external_id: version_id for external_id, version_id in session.execute(statement)}
 
 
 def load(session: Session, ids: Iterable[uuid.UUID]) -> list[SourceRecord]:
