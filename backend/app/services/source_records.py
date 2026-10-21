@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from itertools import batched
 
 from sqlalchemy import Select, bindparam, or_, select, text, update
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID, distinct_on
 from sqlalchemy.orm import Session
 
 from app.ingestion.omerlo.mapping.mappers import MappedRecord
@@ -202,7 +202,7 @@ def latest_versions(session: Session, run: SyncRun, external_ids: list[str]) -> 
             SourceRecord.source_id == run.source_id,
             SourceRecord.external_id.in_(external_ids),
         )
-        .distinct(SourceRecord.external_id)
+        .ext(distinct_on(SourceRecord.external_id))
         .order_by(
             SourceRecord.external_id,
             SourceRecord.valid_from.desc(),
