@@ -49,6 +49,11 @@ class NotFoundError(PulseError):
     code = "not_found"
 
 
+class DatabaseUnavailableError(PulseError):
+    status_code = 503
+    code = "service_unavailable"
+
+
 class ConnectorError(PulseError):
     """An external source such as Omerlo failed or returned something unusable."""
 
