@@ -132,4 +132,4 @@ def run_order(session: Session, run_ids: set[uuid.UUID]) -> dict[uuid.UUID, Any]
     if not run_ids:
         return {}
     rows = session.execute(select(SyncRun.id, SyncRun.started_at).where(SyncRun.id.in_(run_ids)))
-    return dict(rows.tuples())
+    return {run_id: started_at for run_id, started_at in rows}
