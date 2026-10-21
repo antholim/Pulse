@@ -99,7 +99,7 @@ def map_event(payload: dict[str, Any]) -> MappedRecord:
 
 
 def map_named_profile(kind: str, payload: dict[str, Any]) -> MappedRecord:
-    """Projects and events: named per locale, the first named locale gives the key."""
+    """The first locale name is the key; none is fine, since these are not matched by name."""
     names = (text(locale.get("name")) for locale in live_entries(payload, "locales"))
     return MappedRecord(
         kind=kind,
