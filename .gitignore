@@ -32,3 +32,6 @@ coverage/
 
 # Generated synthetic fixtures (rebuild with python -m synthetic.omerlo_fixtures)
 backend/synthetic/out/
+
+# Local raw payload archive (ARCHIVE_DIR)
+raw-archive/

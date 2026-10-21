@@ -131,10 +131,23 @@ def paginate(
 Limit = Annotated[int, Query(ge=1, le=MAX_LIMIT)]
 
 
-def create_app(tenants: list[TenantData]) -> FastAPI:
+def create_app(tenants: list[TenantData], fixtures: Path | None = None) -> FastAPI:
+    """The mock over `tenants`; with `fixtures`, it reloads them when the manifest changes."""
     by_key = {api_key_for(t.tenant.slug): t for t in tenants}
     app = FastAPI(title="Mock Omerlo backoffice API", description="Serves synthetic data only.")
     app.state.api_keys = {key: t.tenant.slug for key, t in by_key.items()}
+    manifest = fixtures / "manifest.json" if fixtures else None
+    loaded = {"manifest": manifest.read_text(encoding="utf-8") if manifest else None}
+
+    def reload_if_changed() -> None:
+        # The mutation script and its reset write the manifest last.
+        if manifest is None:
+            return
+        text = manifest.read_text(encoding="utf-8")
+        if text != loaded["manifest"]:
+            by_key.clear()
+            by_key.update({api_key_for(t.tenant.slug): t for t in load_fixtures(fixtures)})
+            loaded["manifest"] = text
 
     @app.exception_handler(StarletteHTTPException)
     def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -146,6 +159,7 @@ def create_app(tenants: list[TenantData]) -> FastAPI:
         return JSONResponse({"error": f"Invalid parameters: {fields}"}, status_code=400)
 
     def current_tenant(request: Request) -> TenantData:
+        reload_if_changed()
         key = request.headers.get("x-api-key") or request.query_params.get("api_key")
         if not key or key not in by_key:
             raise HTTPException(401, "Unauthorized access")
@@ -256,8 +270,9 @@ def build_app(argv: list[str] | None = None) -> tuple[FastAPI, argparse.Namespac
     parser.add_argument("--port", type=int, default=8100)
     args = parser.parse_args(argv)
 
-    tenants = load_fixtures(args.fixtures) if args.fixtures else generate_fixtures(args.seed)
-    return create_app(tenants), args
+    if args.fixtures:
+        return create_app(load_fixtures(args.fixtures), args.fixtures), args
+    return create_app(generate_fixtures(args.seed)), args
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -1,5 +1,7 @@
 import pytest
+from fastapi.testclient import TestClient
 
+from synthetic.fixture_loader import read_json
 from synthetic.mock_omerlo import (
     CATEGORIES,
     COMMUNITY,
@@ -11,6 +13,7 @@ from synthetic.mock_omerlo import (
     build_app,
     encode_cursor,
 )
+from synthetic.mutate import DEMO, apply_set, reset
 from synthetic.omerlo_fixtures import OmerloFixtureGenerator, write_fixtures
 from synthetic.omerlo_schema import MODELS, SUMMARY_MODELS
 from tests.synthetic.conftest import SMALL
@@ -274,3 +277,28 @@ def test_cli_serves_fixture_files(tmp_path):
 def test_cli_rejects_both_seed_and_fixtures(tmp_path):
     with pytest.raises(SystemExit):
         build_app(["--seed", "1", "--fixtures", str(tmp_path)])
+
+
+def test_mock_serves_mutated_fixtures_without_a_restart(tmp_path):
+    # Arrange
+    fixtures = tmp_path / "fixtures"
+    write_fixtures(OmerloFixtureGenerator(5, SMALL).generate(), fixtures, 5)
+    app, _ = build_app(["--fixtures", str(fixtures)])
+    slug = read_json(fixtures / "manifest.json")["tenants"][0]["slug"]
+    headers = {"x-api-key": api_key_for(slug)}
+
+    with TestClient(app) as client:
+        diff = apply_set(fixtures, DEMO)["tenants"][slug]
+        removed = next(e for e in diff["removed"] if e["kind"] == "organizations")
+        added = next(e for e in diff["added"] if e["kind"] == "organizations")
+
+        # Act
+        gone = client.get(f"{COMMUNITY}/organizations/{removed['id']}", headers=headers)
+        new = client.get(f"{COMMUNITY}/organizations/{added['id']}", headers=headers)
+        reset(fixtures)
+        back = client.get(f"{COMMUNITY}/organizations/{removed['id']}", headers=headers)
+
+    # Assert
+    assert gone.status_code == 404
+    assert new.json()["data"]["name"] == added["label"]
+    assert back.status_code == 200

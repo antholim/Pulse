@@ -89,3 +89,60 @@ Interactive API docs are at http://localhost:8100/docs. In tests, the `mock_omer
 | `GET /community/v2/{organizations,people,projects,events}/{id}` | The full record |
 | `GET /community/v2/{organizations,people,projects,events}/{id}/metadata` | Its key and value entries |
 | `GET /community/v2/events/{id}/sessions` | The event's sessions |
+
+## Mutations between syncs
+
+`mutate.py` changes the fixtures in a known way, so a second sync has something to find: the "run sync twice, see what changed" demo, and the expected diff for change detection ([#60](https://github.com/antholim/Pulse/issues/60)).
+
+```bash
+cd backend
+uv run python -m synthetic.omerlo_fixtures                    # sync 1 reads these
+uv run python -m synthetic.mutate --set demo                  # then sync 2 sees the changes
+uv run python -m synthetic.mutate --reset                     # back to the generated files
+uv run python -m synthetic.mutate --list
+uv run python -m synthetic.mutate --set demo --fixtures /tmp/omerlo
+```
+
+A mutation set is data in `mutate.py`: a name, a description and steps.
+
+| Step | Effect |
+|------|--------|
+| `Add(kind, count)` | New organizations or people, built like the generated ones (new organizations are new entities in the ground truth) |
+| `Edit(kind, fields, count)` | Changes `fields` on `count` records; one field or several at once |
+| `Delete(kind, count)` | Removes organizations, people or events (with their sessions) |
+
+Fields that can be edited:
+
+- organizations: `name`, `domain` (canonical URL, website and email in every locale), `linkedin`, `crm_id` (metadata), `phone`
+- people: `last_name`, `job_title`, `email`, `linkedin`
+
+Records are picked by an RNG seeded with the set and tenant, among records sorted by id that no earlier step touched, so the same set on the same fixtures always gives byte-identical files. Deletes skip records still referenced (project owners, session speakers) and records in a deliberate duplicate pair, so the ground truth stays consistent; it is updated for adds and deletes.
+
+Every added or edited record gets an `updated_at` after every record already in the fixtures (one day after the latest, one minute apart), so an incremental sync sorted by `updated_at-desc` sees it. A metadata change also bumps its record's `updated_at`. Changed records are validated against the schema models.
+
+The `demo` set, in each tenant: adds 2 organizations and 3 people; edits organizations by name, domain, LinkedIn, CRM id, phone and one by name, domain, LinkedIn and CRM id together; edits people by job title, by last name and email, and by LinkedIn; deletes 1 organization, 2 people and 1 event.
+
+Each set writes `expected_diff.<set>.json` next to the fixtures:
+
+```json
+{
+  "mutation_set": "demo",
+  "changed_after": "2026-10-01T00:00:00Z",
+  "tenants": {
+    "demo-capitale": {
+      "added":    [{"kind": "organizations", "id": "...", "label": "...", "updated_at": "..."}],
+      "modified": [{"kind": "organizations", "id": "...", "label": "...", "updated_at": "...",
+                    "fields": ["contact", "metadata", "name", "profile"],
+                    "changes": [{"field": "contact[fr].linkedin", "before": "...", "after": "..."},
+                                {"field": "metadata.crm_id", "before": "...", "after": "..."}]}],
+      "removed":  [{"kind": "events", "id": "...", "label": "..."}]
+    }
+  }
+}
+```
+
+`changed_after` is the latest `updated_at` before the set, so every change is after it. `fields` lists the top-level fields that changed (`metadata` for metadata entries); `changes` gives each leaf, with per-locale entries keyed by locale (`contact[fr].phone`). Lists are sorted by kind, then id.
+
+The first set applied copies the files to `.original/`; `--reset` restores them, deletes the expected diffs and removes `.original/`. Sets stack (each diff is against the state before it), but one set cannot be applied twice without a reset. `manifest.json` lists the applied sets under `mutations`.
+
+The mock server started with `--fixtures` reloads them when `manifest.json` changes, which `mutate` and `--reset` write last, so a running mock serves the mutated data without a restart.
