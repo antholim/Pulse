@@ -16,8 +16,12 @@ from app.storage.raw_records import archive_records, read_run
 pytestmark = pytest.mark.integration
 
 ORG = RawRecord(
-    "organization", "org-1", None, {"id": "org-1", "updated_at": "2026-10-01T12:00:00Z"}
+    "organization",
+    "org-1",
+    datetime(2026, 10, 1, 12, tzinfo=UTC),
+    {"id": "org-1", "updated_at": "2026-10-01T12:00:00Z"},
 )
+SESSION = RawRecord("event_session", "s-1", None, {"id": "s-1"}, parent_external_id="e-1")
 PERSON = RawRecord("person", "p-1", None, {"id": "p-1", "name": "Ada"})
 
 
@@ -57,18 +61,14 @@ def test_archived_payloads_are_recorded_and_read_back(session, archive):
     run = add_run(session, source, 1)
 
     # Act
-    archive_records(session, archive, run, [ORG, PERSON])
+    archive_records(session, archive, run, [ORG, PERSON, SESSION])
     rebuilt = list(read_run(session, archive, tenant.id, run.id))
 
     # Assert
     rows = session.scalars(select(RawRecordRow).where(RawRecordRow.sync_run_id == run.id)).all()
-    assert len(rows) == 2
+    assert len(rows) == 3
     assert all(row.payload_uri.startswith(archive.root.as_uri()) for row in rows)
-    assert [(r.entity_kind, r.external_id, r.payload) for r in rebuilt] == [
-        ("organization", "org-1", ORG.payload),
-        ("person", "p-1", PERSON.payload),
-    ]
-    assert rebuilt[0].updated_at == datetime(2026, 10, 1, 12, tzinfo=UTC)
+    assert rebuilt == [SESSION, ORG, PERSON]
     assert all(f.startswith(f"tenants/{tenant.id}/runs/{run.id}/") for f in files(archive))
 
 
