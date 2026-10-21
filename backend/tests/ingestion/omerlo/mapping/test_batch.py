@@ -36,6 +36,7 @@ def metadata(parent, *pairs, kind="organization"):
 
 
 def test_metadata_and_blocks_are_attached_to_their_parent():
+    # Arrange
     records = [
         raw("organization", payloads.organization()),
         metadata("org-1", ("crm_id", "C-1")),
@@ -49,8 +50,10 @@ def test_metadata_and_blocks_are_attached_to_their_parent():
         ),
     ]
 
+    # Act
     result = map_records(records)
 
+    # Assert
     organization, content = result.records
     assert organization.external_ids == {"crm_id": ["C-1"]}
     assert content.attributes["linked_profiles"] == {"organization": ["org-1"]}
@@ -58,72 +61,90 @@ def test_metadata_and_blocks_are_attached_to_their_parent():
 
 
 def test_companions_of_one_parent_are_joined():
+    # Arrange
     records = [
         raw("organization", payloads.organization()),
         metadata("org-1", ("crm_id", "C-1")),
         metadata("org-1", ("neq", "123")),
     ]
 
+    # Act
     result = map_records(records)
 
+    # Assert
     assert result.records[0].external_ids == {"crm_id": ["C-1"], "neq": ["123"]}
 
 
 @pytest.mark.parametrize("parent", ["org-404", None])
 def test_companions_without_their_parent_are_logged_and_dropped(parent, caplog):
+    # Arrange
     records = [raw("organization", payloads.organization()), metadata(parent, ("crm_id", "C-1"))]
 
+    # Act
     with caplog.at_level(logging.WARNING):
         result = map_records(records)
 
+    # Assert
     assert result.records[0].external_ids == {}
     assert f"parent {parent} is not in this batch" in caplog.text
 
 
 def test_reference_kinds_are_skipped():
+    # Arrange
     records = [
         raw("workspace", {"id": "ws-1"}),
         raw("category", {"id": "cat-1"}),
         raw("event_session", {"id": "session-1"}, parent="event-1"),
     ]
 
+    # Act
     result = map_records(records)
 
+    # Assert
     assert result.records == ()
 
 
 def test_malformed_companion_bodies_read_as_empty():
+    # Arrange
     records = [
         raw("organization", payloads.organization()),
         raw("organization_metadata", {"data": "oops"}, "org-1", "org-1"),
     ]
 
+    # Act
     result = map_records(records)
 
+    # Assert
     assert result.records[0].external_ids == {}
 
 
 def test_failures_are_logged_and_counted_without_stopping(caplog):
+    # Arrange
     nameless = payloads.organization() | {"id": "org-2", "name": None}
     records = [raw("organization", nameless), raw("project", payloads.project())]
 
+    # Act
     with caplog.at_level(logging.WARNING):
         result = map_records(records)
 
+    # Assert
     assert [record.external_id for record in result.records] == ["project-1"]
     assert result.failures == (MappingFailure("organization", "org-2", "organization has no name"),)
     assert "organization org-2" in caplog.text
 
 
 def test_unexpected_errors_are_counted_with_a_traceback(monkeypatch, caplog):
+    # Arrange
     def broken(*args, **kwargs):
         raise KeyError("surprise")
 
     monkeypatch.setattr(batch, "map_record", broken)
 
+    # Act
     with caplog.at_level(logging.ERROR):
         result = map_records([raw("project", payloads.project())])
 
+    # Assert
     assert result.failures == (MappingFailure("project", "project-1", "unexpected KeyError"),)
     assert caplog.records[0].exc_info is not None
 
@@ -134,6 +155,7 @@ def synthetic_tenant():
 
 
 def test_every_synthetic_record_maps(synthetic_tenant):
+    # Arrange
     kinds = {
         payload["id"]: kind
         for file_name, kind in FIXTURE_KINDS.items()
@@ -149,8 +171,10 @@ def test_every_synthetic_record_maps(synthetic_tenant):
         for record_id, entries in synthetic_tenant.metadata.items()
     ]
 
+    # Act
     result = map_records(records)
 
+    # Assert
     assert result.failures == ()
     assert len(result.records) == len(kinds)
     organizations = [r for r in result.records if r.kind == "organization"]

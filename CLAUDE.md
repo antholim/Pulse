@@ -89,7 +89,7 @@ The pre-commit ESLint/Prettier hooks run the binaries in `frontend/node_modules`
 - `backend/synthetic/` generates deterministic, fully synthetic Omerlo data (`uv run python -m synthetic.omerlo_fixtures [--seed N --out DIR --schemas DIR]`) with deliberate duplicate organizations/people and a `ground_truth.dev_only.json` for entity-resolution development. `omerlo_schema.py` holds strict Pydantic models (unknown fields fail). Output in `synthetic/out/` is git-ignored. Both `app` and `synthetic` count toward coverage.
 - **Data rule (Quebec Law 25):** real client data never goes into the repo or into AI tools. Use the synthetic generator for dev/tests/demos.
 
-Tests mirror source layout: `backend/tests/core/` tests `backend/app/core/`; frontend tests sit next to the file they test (`*.test.tsx`).
+Tests mirror source layout: `backend/tests/core/` tests `backend/app/core/`; frontend tests sit next to the file they test (`*.test.tsx`). New tests mark their sections with `# Arrange`, `# Act` and `# Assert` comments (a single `# Act / Assert` when the call and the check are one statement).
 
 ## Frontend
 

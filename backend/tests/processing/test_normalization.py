@@ -152,6 +152,7 @@ def test_normalize_person_name(raw, expected):
     ],
 )
 def test_normalize_text_keeps_every_word(raw, expected):
+    # Act / Assert
     assert normalize_text(raw) == expected
 
 
