@@ -56,8 +56,10 @@ class SourceRecord(Base):
         same_tenant_fk("first_seen_run", "sync_run"),
         same_tenant_fk("last_seen_run", "sync_run"),
         same_tenant_fk("raw_record_id", "raw_record"),
+        same_tenant_fk("removed_run", "sync_run"),
         CheckConstraint(one_of("kind", ENTITY_KINDS), name="kind"),
         CheckConstraint("valid_to IS NULL OR valid_to >= valid_from", name="valid_range"),
+        CheckConstraint("removed_run IS NULL OR valid_to IS NOT NULL", name="removed_is_closed"),
         # At most one current version per record; also finds that version during a sync.
         Index(
             "ux_source_record_current",
@@ -99,6 +101,8 @@ class SourceRecord(Base):
         # Both also index their sync run foreign keys.
         Index("ix_source_record_first_seen_run", "tenant_id", "first_seen_run"),
         Index("ix_source_record_last_seen_run", "tenant_id", "last_seen_run"),
+        # Records a full sync found missing; indexes the sync run foreign key.
+        Index("ix_source_record_removed_run", "tenant_id", "removed_run"),
         # Provenance from a payload to the versions built from it; indexes the foreign key.
         Index("ix_source_record_raw_record", "tenant_id", "raw_record_id"),
     )
@@ -119,3 +123,7 @@ class SourceRecord(Base):
     first_seen_run: Mapped[uuid.UUID]
     last_seen_run: Mapped[uuid.UUID]
     raw_record_id: Mapped[uuid.UUID | None]
+    # Hash of the mapped content; empty never matches, so such a version reads as changed.
+    content_hash: Mapped[str] = mapped_column(Text, server_default="")
+    # The full sync that no longer found the record and closed this version.
+    removed_run: Mapped[uuid.UUID | None]
