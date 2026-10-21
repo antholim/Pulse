@@ -23,6 +23,7 @@ from app.processing.normalization import (
     normalize_organization_name,
     normalize_person_name,
     normalize_phone,
+    normalize_text,
 )
 
 
@@ -141,6 +142,21 @@ def test_normalize_person_name(raw, expected):
 
 
 @pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, None),
+        ("  ", None),
+        ("Festival d'été de Québec", "festival d ete de quebec"),
+        ("Trois-Rivières", "trois rivieres"),
+        ("Gala & Cie Inc.", "gala cie inc"),
+    ],
+)
+def test_normalize_text_keeps_every_word(raw, expected):
+    # Act / Assert
+    assert normalize_text(raw) == expected
+
+
+@pytest.mark.parametrize(
     ("left", "right"),
     [
         ("Marie-Ève Tremblay", "Marie Eve Tremblay"),
@@ -198,6 +214,9 @@ def test_domain_extractor_never_fetches():
         ("in/marie-%c3%a8ve", "in/marie-ève"),
         ("company/acme!bad", None),
         ("in/not a slug", None),
+        ("https://[oops", None),
+        ("//[x", None),
+        ("[x/company/acme", None),
         ("in/marie%20eve", None),
     ],
 )
