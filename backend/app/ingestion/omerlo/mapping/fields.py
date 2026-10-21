@@ -14,6 +14,8 @@ from app.processing.normalization import (
     normalize_text,
 )
 
+# Line breaks and block tags separate words; inline tags like <b> sit inside them.
+_BREAKING_TAG = re.compile(r"<(?:br|/?(?:p|div|h[1-6]|li))\b[^>]*>", re.IGNORECASE)
 _HTML_TAG = re.compile(r"<[^>]+>")
 
 
@@ -27,7 +29,9 @@ def text(value: Any) -> str | None:
 def html_text(value: Any) -> str | None:
     """The text of an HTML fragment such as a `title_html`."""
     raw = text(value)
-    return text(html.unescape(_HTML_TAG.sub(" ", raw))) if raw else None
+    if raw is None:
+        return None
+    return text(html.unescape(_HTML_TAG.sub("", _BREAKING_TAG.sub(" ", raw))))
 
 
 def flag(value: Any) -> bool | None:
