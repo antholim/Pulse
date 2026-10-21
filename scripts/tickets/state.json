@@ -72,7 +72,8 @@
     "S2-02": 112,
     "S2-03": 113,
     "S2-04": 114,
-    "S1-57": 115
+    "S1-57": 115,
+    "S1-50": 119
   },
   "linked": [
     "S1-01",
@@ -134,14 +135,15 @@
     "S2-02",
     "S2-03",
     "S2-04",
-    "S1-57"
+    "S1-57",
+    "S1-50"
   ],
   "hashes": {
     "E1": "3f1ea51a0fcf4845e6d965b7826cc4309ab81709bb4886426641467551b4630a",
     "E2": "345d45918d95fe02266661470a0a4219584712b3c1d886d5d8e9e331d3648e19",
     "E3": "ca1222bb48443b6d0f59dfe86115c26a28c1c489c4ec828848466deccad80dce",
     "E4": "541919b4fce5716e7e173eb688fe3a24d7dccc4e7a79d6f521b00e6e827a5aa5",
-    "E5": "1dbdf1b35b585c65bbfe412750244bfbfcdf2a096ee425d8c32b1037c30e17ba",
+    "E5": "e54ad4d54363b5cf1129fc0cacba3f9b674dec801bd9d48bc6707da47d35ba7c",
     "E6": "7ae6a1e8e23ee0d898ab63ebdcb97e13d749af0974b288a603f29f5aab03fba2",
     "E7": "ed4f53e1952a56706d81bd808064171c231550fe3f691ed40f61899ef3d7f652",
     "E8": "c8566d8b216b470afc83355042cff93037d062adf868c7d3b75b8dc53d1b6f33",
@@ -209,7 +211,8 @@
     "S1-55": "52cb5dc685e4b20c14017a5dad0524b154e88f459dbff50aa479ed63377a6c7d",
     "S1-56": "e04047f10b196be0219a33659b28db2dae2e90ce98cde8dc6a9e07c7d0d15703",
     "S2-01": "57f13f5b0785060c40d02e8254510cfa04d326f2478c94a20cb2b556b7b278ce",
-    "S1-57": "cb5afba847668a7339a7729866ec0a863e5d440eac594276c1769db11e2951c1"
+    "S1-57": "cb5afba847668a7339a7729866ec0a863e5d440eac594276c1769db11e2951c1",
+    "S1-50": "7c6c00f42c68559ac43202caa0bb8ecd31f746b40cd9cbc2ba3da8bc4f4e29c9"
   },
   "meta": {
     "E1": {
@@ -969,6 +972,17 @@
         "must",
         "task",
         "team: data-ai"
+      ]
+    },
+    "S1-50": {
+      "title": "Report deleted Omerlo records from the connector",
+      "milestone": "Iteration 4",
+      "labels": [
+        "Change Tracking",
+        "Release 1",
+        "must",
+        "task",
+        "team: swe"
       ]
     }
   }
