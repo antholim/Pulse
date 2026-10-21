@@ -104,5 +104,5 @@ Logic lives in `domain/`, `services/` and `formatting.py` (testable without Disc
 - Ruff: line length 100, py312, rules `E,F,W,I,B,UP,SIM,RUF` (root `ruff.toml` plus per-project config). Prettier + ESLint for the frontend. `.editorconfig`: LF, 2 spaces (4 for Python).
 - Branches are `feature/<issue>-<slug>` / `fix/<slug>`; commit messages are short imperative sentences ending with the issue number, e.g. `Add security headers and configurable CORS origins (#22)`, optionally with a `feat:` / `fix:` / `test:` / `docs:` prefix.
 - PRs use `.github/pull_request_template.md`, which requires `Closes #N` and an **"AI assistance"** section (SOEN 490 requirement).
-- Before writing a commit, PR or issue, read `docs/writing-prs-and-issues.md`: small commits, the existing PR format, no AI-sounding wording, and never a `Co-Authored-By` trailer or "Generated with" footer.
+- Before writing a commit, PR or issue, read `docs/writing-prs-and-issues.md`: small commits, the existing PR format, short code comments with no issue numbers, no AI-sounding wording, and never a `Co-Authored-By` trailer or "Generated with" footer.
 - Backlog issues are generated from `scripts/tickets/data.py` via `python build.py` (dry run) / `--apply`; always commit `state.json` afterwards and never delete it. No em or en dashes in ticket text.

@@ -42,6 +42,14 @@ Hand-written ones use the templates in `.github/ISSUE_TEMPLATE/` and the same
 sections as the generated tickets: Goal or User story, Context, Acceptance
 criteria, Tasks, Dependencies, Out of scope, Definition of done.
 
+## Code comments
+
+- Short: a one-line docstring or comment, only where the code doesn't already
+  say it. No multi-paragraph module docstrings explaining design decisions; those
+  go in the PR description.
+- **Never put issue numbers in comments or docstrings.** They belong in commit
+  messages and PRs.
+
 ## Wording
 
 Write like a teammate, not like a chatbot:
