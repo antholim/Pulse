@@ -2,16 +2,20 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import { ApiError, getHealth } from "./services/api";
+import { ApiError, getHealth, getRuns, getTenants } from "./services/api";
 
 vi.mock("./services/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./services/api")>()),
   getHealth: vi.fn(),
+  getTenants: vi.fn(),
+  getRuns: vi.fn(),
 }));
 
 describe("App", () => {
   it("shows the backend status once it loads", async () => {
     vi.mocked(getHealth).mockResolvedValue({ status: "ok", service: "pulse-backend" });
+    vi.mocked(getTenants).mockResolvedValue([]);
+    vi.mocked(getRuns).mockResolvedValue([]);
 
     render(<App />);
 

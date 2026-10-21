@@ -67,3 +67,100 @@ async function request<T>(path: string): Promise<T> {
 export function getHealth(): Promise<Health> {
   return request<Health>("/api/health");
 }
+
+export type ChangeType = "added" | "modified" | "removed";
+
+export interface FieldChange {
+  before: unknown;
+  after: unknown;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string | null;
+}
+
+export interface SyncRun {
+  id: string;
+  source_id: string;
+  mode: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  counts: Record<string, unknown> & { changes?: Partial<Record<ChangeType, number>> };
+  error: string | null;
+}
+
+export interface RecordChange {
+  change_type: ChangeType;
+  kind: string;
+  source_id: string;
+  external_id: string;
+  label: string;
+  changed_fields: Record<string, FieldChange>;
+}
+
+export interface RecordSummary {
+  source_id: string;
+  external_id: string;
+  kind: string;
+  label: string;
+  domain: string | null;
+  linkedin: string | null;
+  valid_from: string;
+}
+
+export interface VersionEvent {
+  sync_run_id: string;
+  change_type: ChangeType;
+  changed_fields: Record<string, FieldChange>;
+}
+
+export interface RecordVersion {
+  id: string;
+  label: string;
+  name_normalized: string | null;
+  domain: string | null;
+  linkedin: string | null;
+  external_ids: Record<string, unknown>;
+  valid_from: string;
+  valid_to: string | null;
+  first_seen_run: string;
+  removed_run: string | null;
+  events: VersionEvent[];
+}
+
+export interface RecordHistory {
+  source_id: string;
+  external_id: string;
+  kind: string;
+  versions: RecordVersion[];
+}
+
+export function getTenants(): Promise<Tenant[]> {
+  return request<Tenant[]>("/api/tenants");
+}
+
+export function getRuns(tenantId: string): Promise<SyncRun[]> {
+  return request<SyncRun[]>(`/api/tenants/${tenantId}/runs`);
+}
+
+export function getRunChanges(tenantId: string, runId: string): Promise<RecordChange[]> {
+  return request<RecordChange[]>(`/api/tenants/${tenantId}/runs/${runId}/changes`);
+}
+
+export function searchRecords(tenantId: string, query: string): Promise<RecordSummary[]> {
+  const params = new URLSearchParams({ q: query });
+  return request<RecordSummary[]>(`/api/tenants/${tenantId}/records?${params}`);
+}
+
+export function getRecordHistory(
+  tenantId: string,
+  sourceId: string,
+  externalId: string,
+): Promise<RecordHistory> {
+  return request<RecordHistory>(
+    `/api/tenants/${tenantId}/records/${sourceId}/${encodeURIComponent(externalId)}`,
+  );
+}
