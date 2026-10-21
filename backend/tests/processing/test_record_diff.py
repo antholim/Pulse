@@ -11,6 +11,10 @@ from app.processing.record_diff import (
     field_changes,
     snapshot,
 )
+from synthetic.mutate import DEMO, mutate
+from synthetic.omerlo_fixtures import OmerloFixtureGenerator
+from tests.fixture_diff import assert_fields_correspond, expected, mapped_records
+from tests.synthetic.conftest import SMALL
 
 
 def organization(**attributes) -> MappedRecord:
@@ -154,3 +158,26 @@ def test_snapshots_are_sorted_into_added_modified_and_removed():
     assert diff.removed == ["a"]
     assert diff.modified == {"c": {"name": {"before": "trois", "after": "trois!"}}}
 
+
+def test_the_demo_mutation_set_gives_exactly_its_expected_diff_once_mapped():
+    # Arrange
+    before = OmerloFixtureGenerator(5, SMALL).generate()
+    after, expected_diff = mutate(before, DEMO)
+
+    for old, new in zip(before, after, strict=True):
+        wanted = expected(expected_diff["tenants"][old.tenant.slug])
+        kinds = {r.external_id: r.kind for r in mapped_records(old) + mapped_records(new)}
+
+        # Act
+        diff = diff_snapshots(
+            {r.external_id: snapshot(r) for r in mapped_records(old)},
+            {r.external_id: snapshot(r) for r in mapped_records(new)},
+        )
+
+        # Assert
+        assert {(kinds[i], i) for i in diff.added} == wanted.added
+        assert {(kinds[i], i) for i in diff.removed} == wanted.removed
+        assert {(kinds[i], i) for i in diff.modified} == set(wanted.modified)
+        for external_id, fields in diff.modified.items():
+            key = (kinds[external_id], external_id)
+            assert_fields_correspond(key[0], wanted.modified[key], fields)
