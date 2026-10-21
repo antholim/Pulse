@@ -11,7 +11,7 @@ from app import sync as sync_command
 from app.ingestion.connector import parse_timestamp
 from app.ingestion.omerlo.connector import OmerloConnector
 from app.models import RawRecord as RawRecordRow
-from app.models import Source, SourceRecord, SyncRun, Tenant
+from app.models import RecordChange, Source, SourceRecord, SyncRun, Tenant
 from app.seed import seed
 from app.services.sync_runs import run_sync
 from app.storage.local import LocalArchive
@@ -19,6 +19,7 @@ from synthetic.fixture_loader import load_fixtures
 from synthetic.mock_omerlo import api_key_for, create_app
 from synthetic.mutate import DEMO, apply_set
 from synthetic.omerlo_fixtures import OmerloFixtureGenerator, write_fixtures
+from tests.fixture_diff import assert_fields_correspond, expected
 from tests.synthetic.conftest import SMALL
 
 pytestmark = pytest.mark.integration
@@ -258,27 +259,59 @@ def test_a_rejected_api_key_fails_the_run_without_storing_anything(session, sync
     assert version_count(session) == 0
 
 
-def test_change_detection_gets_the_run_outcome_after_the_versions_are_stored(
-    session, sync, fixtures
-):
+def recorded_changes(session: Session, run: SyncRun) -> dict[tuple[str, str], tuple[str, dict]]:
+    """(kind, external id) -> (change type, changed fields) of the run's record_change rows."""
+    statement = (
+        select(SourceRecord.kind, SourceRecord.external_id, RecordChange)
+        .join(RecordChange, RecordChange.source_record_id == SourceRecord.id)
+        .where(RecordChange.sync_run_id == run.id)
+    )
+    return {
+        (kind, external_id): (change.change_type, change.changed_fields)
+        for kind, external_id, change in session.execute(statement)
+    }
+
+
+def of_type(found, change_type: str) -> set[tuple[str, str]]:
+    return {key for key, (found_type, _) in found.items() if found_type == change_type}
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_a_sync_after_the_demo_mutation_records_the_expected_changes(session, sync, fixtures, full):
     # Arrange
     sync(full=True)
-    diff = apply_set(fixtures, DEMO)["tenants"][SLUG]
-    calls = []
-
-    def detector(detector_session, run, upserted, removed):
-        stored = select(func.count()).where(SourceRecord.first_seen_run == run.id)
-        calls.append((run.id, set(upserted.added), removed, detector_session.scalar(stored)))
+    wanted = expected(apply_set(fixtures, DEMO)["tenants"][SLUG])
 
     # Act
-    run = sync(full=True, detect_changes=detector)
+    run = sync(full=full)
 
     # Assert
-    [(run_id, added, removed, stored)] = calls
-    assert run_id == run.id
-    assert added == ids_of(diff["added"])
-    assert set(removed) == ids_of(diff["removed"])
-    assert stored == len(ids_of(diff["added"]) | ids_of(diff["modified"]))
+    found = recorded_changes(session, run)
+    # Only a full sync can see deletions.
+    removed = wanted.removed if full else set()
+    assert of_type(found, "added") == wanted.added
+    assert of_type(found, "modified") == set(wanted.modified)
+    assert of_type(found, "removed") == removed
+    for key, changes in wanted.modified.items():
+        assert_fields_correspond(key[0], changes, found[key][1])
+    assert run.counts["changes"] == {
+        "added": len(wanted.added),
+        "modified": len(wanted.modified),
+        "removed": len(removed),
+    }
+    assert run.counts["new"] == len(wanted.added)
+
+
+def test_a_sync_with_no_source_changes_records_no_changes(session, sync):
+    # Arrange
+    sync(full=True)
+
+    # Act
+    run = sync()
+
+    # Assert
+    assert recorded_changes(session, run) == {}
+    assert run.counts["changes"] == {"added": 0, "modified": 0, "removed": 0}
 
 
 def test_sync_command_runs_a_seeded_mock_source(

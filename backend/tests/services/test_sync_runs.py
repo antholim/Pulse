@@ -198,8 +198,7 @@ def test_a_successful_run_records_its_counts_and_advances_the_watermarks(session
         "failed": 0,
     }
     assert target.workspace_watermarks == {"ws-1": {"organization": T1.isoformat()}}
-    [(_, detected_run, upserted, removed)] = detected
-    assert (detected_run, upserted.added, removed) == (run, ["o1"], ["o5"])
+    assert detected == [(session, run)]
     assert session.commit.call_count == 3
 
 

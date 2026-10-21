@@ -3,7 +3,6 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol
 
 from sqlalchemy.orm import Session
 
@@ -12,7 +11,8 @@ from app.ingestion.connector import RawRecord, parse_timestamp
 from app.ingestion.omerlo.connector import OmerloConnector
 from app.ingestion.omerlo.mapping.batch import map_records
 from app.models import Source, SyncRun
-from app.services.source_records import UpsertResult, close_unseen, upsert_records
+from app.services.record_changes import record_changes
+from app.services.source_records import close_unseen, upsert_records
 from app.storage.archive import PayloadArchive
 from app.storage.raw_records import archive_records
 
@@ -23,16 +23,8 @@ MAX_ERROR_LENGTH = 2000
 WorkspaceWatermarks = dict[str, dict[str, datetime]]
 
 
-class ChangeDetector(Protocol):
-    def __call__(
-        self, session: Session, run: SyncRun, upserted: UpsertResult, removed: list[str]
-    ) -> None: ...
-
-
-def skip_change_detection(
-    session: Session, run: SyncRun, upserted: UpsertResult, removed: list[str]
-) -> None:
-    """Default detector: records no changes."""
+# Writes the run's record_change rows in the run's transaction, returning counts per type.
+ChangeDetector = Callable[[Session, SyncRun], dict[str, int]]
 
 
 @dataclass
@@ -54,7 +46,7 @@ def run_sync(
     archive: PayloadArchive,
     *,
     full: bool = False,
-    detect_changes: ChangeDetector = skip_change_detection,
+    detect_changes: ChangeDetector = record_changes,
     now: Callable[[], datetime] = utc_now,
 ) -> SyncRun:
     """Run one sync of `source` and return its sync_run, committed whatever the outcome.
@@ -89,6 +81,7 @@ def run_sync(
                 logged.update(counts)
     except Exception as error:
         session.rollback()
+        run.counts = {}
         # Counts of the rolled back writes would describe data that is not there.
         failed_counts = {**dict.fromkeys(COUNT_KEYS, 0), "fetched": counts["fetched"]}
         finish(run, "failed", failed_counts, now(), error=describe(error))
@@ -137,8 +130,8 @@ def store(
     removed: list[str] = []
     if run.mode == "full":
         removed = close_unseen(session, run, keep={f.external_id for f in mapped.failures})
-    # Change detection compares this run with the previous one, in the same transaction.
-    detect_changes(session, run, upserted, removed)
+    # Reads the versions this run opened and closed, so it comes after both.
+    detect_changes(session, run)
     advance_watermarks(source, fetched)
     return {
         "new": len(upserted.added),
@@ -153,7 +146,8 @@ def finish(
     run: SyncRun, status: str, counts: dict[str, int], at: datetime, error: str | None = None
 ) -> None:
     run.status = status
-    run.counts = counts
+    # Keeps what change detection added to the counts.
+    run.counts = {**(run.counts or {}), **counts}
     run.finished_at = max(at, run.started_at)
     run.error = error
 
