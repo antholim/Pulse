@@ -68,6 +68,21 @@ uv run alembic downgrade -1          # undo the last migration
 
 CI fails when the models and the migrations disagree (`alembic check` in `tests/integration/test_migrations.py`).
 
+## Raw payload archive
+
+Every payload a connector fetches is archived unchanged before any transformation (ADR D4), and a `raw_record` row stores its URI and SHA-256 hash (of the payload as JSON with sorted keys). The code is in `backend/app/storage/`.
+
+- Keys are `tenants/<tenant_id>/runs/<sync_run_id>/<entity_kind>/<sha256>.json`. A payload is read back only by its own tenant; other tenants' keys and paths with `..` are refused.
+- A payload identical to the previous version of the same record (same hash, same source) is not stored again: the new `raw_record` row points at the archived copy.
+- `read_run()` reads a sync run's payloads back as raw records, to rebuild its source records.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ARCHIVE_BACKEND` | `local` | `local` (a folder, for development) or `s3` (S3-compatible storage such as Tigris on Fly.io) |
+| `ARCHIVE_DIR` | `raw-archive` | Folder of the local backend (git-ignored) |
+| `ARCHIVE_BUCKET` | | Bucket of the `s3` backend (required with `s3`) |
+| `ARCHIVE_S3_ENDPOINT_URL`, `ARCHIVE_S3_REGION`, `ARCHIVE_S3_ACCESS_KEY_ID`, `ARCHIVE_S3_SECRET_ACCESS_KEY` | | Optional; unset values fall back to the `AWS_*` variables, which `fly storage create` sets |
+
 ## Logging and errors
 
 The backend writes one JSON object per line to stdout, with `timestamp`, `level`, `module`, `event` and a `request_id` (API requests) or `run_id` (syncs and imports). Set the level with `LOG_LEVEL` (`DEBUG`, `INFO`, `WARN`, `ERROR`; default `INFO`). Emails, phone numbers and secrets are masked.
