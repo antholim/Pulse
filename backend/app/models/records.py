@@ -17,6 +17,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, json_column, one_of, same_tenant_fk, tenant_id_column, uuid_pk
 
 ENTITY_KINDS = ("organization", "person", "project", "event", "content")
+# Everything a connector yields: entities, reference data and companions of an entity.
+RAW_ENTITY_KINDS = (
+    *ENTITY_KINDS,
+    "workspace",
+    "category",
+    "organization_metadata",
+    "person_metadata",
+    "project_metadata",
+    "event_metadata",
+    "event_session",
+    "content_blocks",
+)
 
 CURRENT_VERSION = text("valid_to IS NULL")
 
@@ -28,9 +40,11 @@ class RawRecord(Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "id"),
         same_tenant_fk("sync_run_id", "sync_run"),
-        CheckConstraint(one_of("entity_kind", ENTITY_KINDS), name="entity_kind"),
+        CheckConstraint(one_of("entity_kind", RAW_ENTITY_KINDS), name="entity_kind"),
         # The payloads a run archived; indexes the sync run foreign key.
         Index("ix_raw_record_sync_run", "tenant_id", "sync_run_id"),
+        # The previous payload of a record, so an unchanged one is not stored again.
+        Index("ix_raw_record_external_id", "tenant_id", "entity_kind", "external_id"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -40,6 +54,9 @@ class RawRecord(Base):
     entity_kind: Mapped[str] = mapped_column(Text)
     payload_uri: Mapped[str] = mapped_column(Text)
     payload_hash: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The record this one belongs to, e.g. the event of a session.
+    parent_external_id: Mapped[str | None] = mapped_column(Text)
 
 
 class SourceRecord(Base):

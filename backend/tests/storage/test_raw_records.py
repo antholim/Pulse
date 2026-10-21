@@ -34,8 +34,11 @@ def session(mocker):
     return session
 
 
-def record(external_id="org-1", payload=PAYLOAD, kind="organization"):
-    return RawRecord(kind, external_id, None, payload)
+UPDATED_AT = datetime(2026, 10, 1, 12, tzinfo=UTC)
+
+
+def record(external_id="org-1", payload=PAYLOAD, kind="organization", parent=None):
+    return RawRecord(kind, external_id, UPDATED_AT, payload, parent)
 
 
 def test_archive_records_stores_each_payload_and_adds_a_row(session, archive):
@@ -95,15 +98,36 @@ def test_archive_records_stores_a_repeated_payload_once_within_a_run(session, ar
     put.assert_called_once()
 
 
+def test_archive_records_accepts_reference_data_and_companions(session, archive):
+    # Arrange
+    records = [
+        record("ws-1", {"id": "ws-1"}, kind="workspace"),
+        record("org-1", {"data": []}, kind="organization_metadata", parent="org-1"),
+        record("s-1", {"id": "s-1"}, kind="event_session", parent="e-1"),
+    ]
+
+    # Act
+    rows = archive_records(session, archive, RUN, records)
+
+    # Assert
+    assert [(r.entity_kind, r.parent_external_id) for r in rows] == [
+        ("workspace", None),
+        ("organization_metadata", "org-1"),
+        ("event_session", "e-1"),
+    ]
+
+
 def test_archive_records_rejects_kinds_raw_record_does_not_accept(session, archive):
     # Act / Assert
-    with pytest.raises(ArchiveError, match="workspace"):
-        archive_records(session, archive, RUN, [record(kind="workspace")])
+    with pytest.raises(ArchiveError, match="unknown"):
+        archive_records(session, archive, RUN, [record(kind="unknown")])
 
 
 def test_read_run_rebuilds_the_raw_records_from_the_archive(session, archive):
     # Arrange
-    [row] = archive_records(session, archive, RUN, [record()])
+    [row] = archive_records(
+        session, archive, RUN, [record("s-1", kind="event_session", parent="e-1")]
+    )
     session.scalars.return_value = [row]
 
     # Act
@@ -111,10 +135,11 @@ def test_read_run_rebuilds_the_raw_records_from_the_archive(session, archive):
 
     # Assert
     assert rebuilt == RawRecord(
-        entity_kind="organization",
-        external_id="org-1",
-        updated_at=datetime(2026, 10, 1, 12, tzinfo=UTC),
+        entity_kind="event_session",
+        external_id="s-1",
+        updated_at=UPDATED_AT,
         payload=PAYLOAD,
+        parent_external_id="e-1",
     )
 
 

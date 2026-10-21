@@ -10,10 +10,10 @@ from sqlalchemy import and_, select, tuple_
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
-from app.ingestion.connector import RawRecord, parse_timestamp
+from app.ingestion.connector import RawRecord
 from app.models import RawRecord as RawRecordRow
 from app.models import SyncRun
-from app.models.records import ENTITY_KINDS
+from app.models.records import RAW_ENTITY_KINDS
 from app.storage.archive import (
     ArchiveError,
     ArchiveIntegrityError,
@@ -47,7 +47,7 @@ def archive_records(
     for chunk in batched(records, LOOKUP_BATCH_SIZE):
         latest = _latest_archived(session, run, chunk)
         for record in chunk:
-            if record.entity_kind not in ENTITY_KINDS:
+            if record.entity_kind not in RAW_ENTITY_KINDS:
                 raise ArchiveError(f"raw_record does not accept entity kind {record.entity_kind!r}")
             data = canonical_json(record.payload)
             digest = payload_hash(data)
@@ -65,6 +65,8 @@ def archive_records(
                     entity_kind=record.entity_kind,
                     payload_uri=previous.uri,
                     payload_hash=digest,
+                    updated_at=record.updated_at,
+                    parent_external_id=record.parent_external_id,
                 )
             )
         session.add_all(rows[-len(chunk) :])
@@ -114,11 +116,7 @@ def _latest_archived(
 def read_run(
     session: Session, archive: PayloadArchive, tenant_id: uuid.UUID, sync_run_id: uuid.UUID
 ) -> Iterator[RawRecord]:
-    """Yield the raw records a sync run archived, rebuilt from the archive, for reprocessing.
-
-    `updated_at` is read back from the payload's `updated_at` field, and
-    `parent_external_id` is not kept, so it is always None.
-    """
+    """Yield the raw records a sync run archived, rebuilt from the archive, for reprocessing."""
     statement = (
         select(RawRecordRow)
         .where(RawRecordRow.tenant_id == tenant_id, RawRecordRow.sync_run_id == sync_run_id)
@@ -134,6 +132,7 @@ def read_run(
         yield RawRecord(
             entity_kind=row.entity_kind,
             external_id=row.external_id,
-            updated_at=parse_timestamp(payload.get("updated_at")),
+            updated_at=row.updated_at,
             payload=payload,
+            parent_external_id=row.parent_external_id,
         )
