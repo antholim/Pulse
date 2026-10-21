@@ -30,13 +30,16 @@ def raw(kind, payload, external_id=None, parent=None):
     )
 
 
+def metadata(parent, *pairs, kind="organization"):
+    entries = [{"key": key, "value": value} for key, value in pairs]
+    return raw(f"{kind}_metadata", {"data": entries}, parent, parent)
+
+
 def test_metadata_and_blocks_are_attached_to_their_parent():
     records = [
         raw("organization", payloads.organization()),
-        raw(
-            "organization_metadata", {"data": [{"key": "crm_id", "value": "C-1"}]}, "org-1", "org-1"
-        ),
-        raw("person_metadata", {"data": [{"key": "crm_id", "value": "P-1"}]}, "org-1", "org-1"),
+        metadata("org-1", ("crm_id", "C-1")),
+        metadata("org-1", ("crm_id", "P-1"), kind="person"),
         raw("content", payloads.content()),
         raw(
             "content_blocks",
@@ -54,6 +57,29 @@ def test_metadata_and_blocks_are_attached_to_their_parent():
     assert result.failures == ()
 
 
+def test_companions_of_one_parent_are_joined():
+    records = [
+        raw("organization", payloads.organization()),
+        metadata("org-1", ("crm_id", "C-1")),
+        metadata("org-1", ("neq", "123")),
+    ]
+
+    result = map_records(records)
+
+    assert result.records[0].external_ids == {"crm_id": ["C-1"], "neq": ["123"]}
+
+
+@pytest.mark.parametrize("parent", ["org-404", None])
+def test_companions_without_their_parent_are_logged_and_dropped(parent, caplog):
+    records = [raw("organization", payloads.organization()), metadata(parent, ("crm_id", "C-1"))]
+
+    with caplog.at_level(logging.WARNING):
+        result = map_records(records)
+
+    assert result.records[0].external_ids == {}
+    assert f"parent {parent} is not in this batch" in caplog.text
+
+
 def test_reference_kinds_are_skipped():
     records = [
         raw("workspace", {"id": "ws-1"}),
@@ -61,7 +87,9 @@ def test_reference_kinds_are_skipped():
         raw("event_session", {"id": "session-1"}, parent="event-1"),
     ]
 
-    assert map_records(records).records == ()
+    result = map_records(records)
+
+    assert result.records == ()
 
 
 def test_malformed_companion_bodies_read_as_empty():
@@ -70,7 +98,9 @@ def test_malformed_companion_bodies_read_as_empty():
         raw("organization_metadata", {"data": "oops"}, "org-1", "org-1"),
     ]
 
-    assert map_records(records).records[0].external_ids == {}
+    result = map_records(records)
+
+    assert result.records[0].external_ids == {}
 
 
 def test_failures_are_logged_and_counted_without_stopping(caplog):

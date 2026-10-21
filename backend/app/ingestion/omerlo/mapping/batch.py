@@ -29,13 +29,12 @@ class MappingResult:
 
 
 def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
-    """Map every entity record; failures are logged with the external id and returned."""
+    """Map every entity record; failures are logged with the external id and returned.
+
+    A record and its companions must be in the same call, so the whole run is held in memory.
+    """
     records = list(raw_records)
-    companions = {
-        (record.entity_kind, record.parent_external_id): record.payload
-        for record in records
-        if is_companion(record.entity_kind) and record.parent_external_id
-    }
+    companions = group_companions(records)
     mapped: list[MappedRecord] = []
     failures: list[MappingFailure] = []
     for record in records:
@@ -54,14 +53,35 @@ def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
     return MappingResult(tuple(mapped), tuple(failures))
 
 
-def map_with_companions(record: RawRecord, companions: dict[tuple[str, str], Any]) -> MappedRecord:
-    metadata = companions.get((record.entity_kind + METADATA_SUFFIX, record.external_id))
-    blocks = companions.get((CONTENT_BLOCKS, record.external_id))
+def group_companions(records: list[RawRecord]) -> dict[tuple[str, str], list[Any]]:
+    """The `data` entries of companion records by (kind, parent id), joined across pages."""
+    entity_ids = {record.external_id for record in records if record.entity_kind in ENTITY_KINDS}
+    groups: dict[tuple[str, str], list[Any]] = {}
+    for record in records:
+        if not is_companion(record.entity_kind):
+            continue
+        parent = record.parent_external_id
+        if parent not in entity_ids:
+            logger.warning(
+                "Dropping Omerlo %s %s: parent %s is not in this batch",
+                record.entity_kind,
+                record.external_id,
+                parent,
+            )
+            continue
+        groups.setdefault((record.entity_kind, parent), []).extend(data_list(record.payload))
+    return groups
+
+
+def map_with_companions(
+    record: RawRecord, companions: dict[tuple[str, str], list[Any]]
+) -> MappedRecord:
+    key = record.external_id
     return map_record(
         record.entity_kind,
         record.payload,
-        metadata=data_list(metadata),
-        blocks=data_list(blocks),
+        metadata=companions.get((record.entity_kind + METADATA_SUFFIX, key), []),
+        blocks=companions.get((CONTENT_BLOCKS, key), []),
     )
 
 
