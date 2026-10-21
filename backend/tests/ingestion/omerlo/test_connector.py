@@ -188,6 +188,27 @@ def test_workspace_ids_limit_the_sync(api, client):
     assert second.call_count == 0
 
 
+def test_each_workspace_can_be_fetched_from_its_own_watermark(api, client):
+    # Arrange
+    new, _ = add_record(api, "person", "p-new", NEW)
+    old, old_routes = add_record(api, "person", "p-old", OLD)
+    api.get(url(WORKSPACES)).mock(return_value=page([{"id": WS}, {"id": "ws-2"}]))
+    api.get(list_url("person")).mock(return_value=page([new, old]))
+    other = api.get(list_url("person", "ws-2")).mock(return_value=page([]))
+    connector = OmerloConnector(client, entity_kinds=["person"], metadata=False)
+
+    # Act
+    workspaces = [w["id"] for w in connector.workspaces()]
+    records = list(connector.fetch_community("person", WS, WATERMARK))
+
+    # Assert
+    assert workspaces == [WS, "ws-2"]
+    assert connector.community_kinds == ("person",)
+    assert kinds_and_ids(records) == [("person", "p-new")]
+    assert old_routes["detail"].call_count == 0
+    assert other.call_count == 0
+
+
 def test_configured_workspace_the_key_cannot_see_is_an_error(api, client):
     connector = OmerloConnector(client, workspace_ids=[WS, "ws-gone"])
 
