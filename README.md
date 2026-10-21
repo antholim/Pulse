@@ -92,6 +92,20 @@ uv run python -m synthetic.mutate --reset                   # back to the genera
 
 A `mock` source uses the mock's key for its tenant (`mock-<slug>`) and the `base_url` of its config. An `omerlo` source reads `OMERLO_API_KEY` and `OMERLO_BASE_URL` (the source's `base_url` wins), and its config can list `workspace_ids` to sync only those.
 
+### Seeing the results
+
+Start the API (`uv run uvicorn app.main:app --reload` in `backend/`) and the frontend (`npm run dev` in `frontend/`), then open http://localhost:5173. The page lists each tenant's sync runs with their counts, shows what a run added, modified (field by field, before and after) or removed, and opens a record's history: every version, and the change that created it. Search finds a current record by name.
+
+It reads these endpoints (no authentication yet, so keep them local):
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/tenants` | Tenants |
+| `GET /api/tenants/{tenant_id}/runs` | The latest 50 sync runs, newest first |
+| `GET /api/tenants/{tenant_id}/runs/{run_id}/changes` | The run's added, modified and removed records |
+| `GET /api/tenants/{tenant_id}/records?q=&kind=` | Current records matching a name |
+| `GET /api/tenants/{tenant_id}/records/{source_id}/{external_id}` | Every version of one record with its changes |
+
 ## Raw payload archive
 
 Every payload a connector fetches is archived unchanged before any transformation (ADR D4), and a `raw_record` row stores its URI and SHA-256 hash (of the payload as JSON with sorted keys). The code is in `backend/app/storage/`.
