@@ -4,6 +4,7 @@
   --removed: #c62828;
   font-size: 15px;
   color: var(--text-h);
+  text-align: left;
 }
 
 .sync-runs-page h2 {
