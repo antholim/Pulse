@@ -8,6 +8,7 @@ dependencies = [
     "annotated-doc==0.0.5",
     "annotated-types==0.8.0",
     "anyio==4.15.1",
+    "boto3>=1.43.116",
     "certifi==2026.7.22",
     "charset-normalizer==3.5.2",
     "click==8.5.0",
@@ -97,7 +98,9 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "T20"]
 # Command-line output for whoever runs the generator, not application logging.
 "synthetic/omerlo_fixtures.py" = ["T201"]
 "synthetic/mock_omerlo.py" = ["T201"]
+"synthetic/mutate.py" = ["T201"]
 "app/seed.py" = ["T201"]
+"app/sync.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

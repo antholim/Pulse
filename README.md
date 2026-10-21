@@ -68,6 +68,59 @@ uv run alembic downgrade -1          # undo the last migration
 
 CI fails when the models and the migrations disagree (`alembic check` in `tests/integration/test_migrations.py`).
 
+## Running a sync
+
+`app.sync` runs one sync of a tenant's source and records it as a `sync_run`: it fetches from Omerlo (or the mock), archives every raw payload, maps the records, stores new versions and records what changed. To try it locally against the mock server:
+
+```bash
+cd backend
+uv run alembic upgrade head && uv run python -m app.seed
+uv run python -m synthetic.omerlo_fixtures                  # write the fixtures to synthetic/out/
+uv run python -m synthetic.mock_omerlo --fixtures synthetic/out &   # mock on :8100
+
+uv run python -m app.sync --tenant demo-capitale --full     # first sync: every record is new
+uv run python -m synthetic.mutate --set demo                # change the fixtures; the mock reloads them
+uv run python -m app.sync --tenant demo-capitale            # incremental: only what changed
+uv run python -m synthetic.mutate --reset                   # back to the generated fixtures
+```
+
+`--tenant` takes a tenant id or its Omerlo media slug; `--source <id>` is needed only when the tenant has more than one source. The command prints the run's counts (`fetched`, `new`, `changed`, `unchanged`, `removed`, `failed`) and exits with 1 when the run failed; `sync_run.counts.changes` holds the change counts and `sync_run.error` the reason of a failure.
+
+- **Incremental** (default): each workspace and entity kind is read newest first from its own watermark (`source.workspace_watermarks`) and the read stops at the first older record. Workspaces and categories use `source.watermark_updated_at`. Watermarks only move when the run succeeds. Deleted records are not seen.
+- **Full** (`--full`): reads everything and closes, as removed, every record the run did not see.
+- **Errors**: network errors, 429 and 5xx answers are retried 4 times, waiting 1, 2 then 4 seconds (`OMERLO_RETRY_ATTEMPTS`, `OMERLO_RETRY_BASE_DELAY_SECONDS`). A rejected API key stops the run at once. A failed run keeps its archived payloads but rolls back its versions, changes and watermarks.
+
+A `mock` source uses the mock's key for its tenant (`mock-<slug>`) and the `base_url` of its config. An `omerlo` source reads `OMERLO_API_KEY` and `OMERLO_BASE_URL` (the source's `base_url` wins), and its config can list `workspace_ids` to sync only those.
+
+### Seeing the results
+
+Start the API (`uv run uvicorn app.main:app --reload` in `backend/`) and the frontend (`npm run dev` in `frontend/`), then open http://localhost:5173. The page lists each tenant's sync runs with their counts, shows what a run added, modified (field by field, before and after) or removed, and opens a record's history: every version, and the change that created it. Search finds a current record by name.
+
+It reads these endpoints (no authentication yet, so keep them local):
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/tenants` | Tenants |
+| `GET /api/tenants/{tenant_id}/runs` | The latest 50 sync runs, newest first |
+| `GET /api/tenants/{tenant_id}/runs/{run_id}/changes` | The run's added, modified and removed records |
+| `GET /api/tenants/{tenant_id}/records?q=&kind=` | Current records matching a name |
+| `GET /api/tenants/{tenant_id}/records/{source_id}/{external_id}` | Every version of one record with its changes |
+
+## Raw payload archive
+
+Every payload a connector fetches is archived unchanged before any transformation (ADR D4), and a `raw_record` row stores its URI and SHA-256 hash (of the payload as JSON with sorted keys). The code is in `backend/app/storage/`.
+
+- Keys are `tenants/<tenant_id>/runs/<sync_run_id>/<entity_kind>/<sha256>.json`. A payload is read back only by its own tenant; other tenants' keys and paths with `..` are refused.
+- A payload identical to the previous version of the same record (same hash, same source) is not stored again: the new `raw_record` row points at the archived copy.
+- `read_run()` reads a sync run's payloads back as raw records, to rebuild its source records.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ARCHIVE_BACKEND` | `local` | `local` (a folder, for development) or `s3` (S3-compatible storage such as Tigris on Fly.io) |
+| `ARCHIVE_DIR` | `raw-archive` | Folder of the local backend (git-ignored) |
+| `ARCHIVE_BUCKET` | | Bucket of the `s3` backend (required with `s3`) |
+| `ARCHIVE_S3_ENDPOINT_URL`, `ARCHIVE_S3_REGION`, `ARCHIVE_S3_ACCESS_KEY_ID`, `ARCHIVE_S3_SECRET_ACCESS_KEY` | | Optional; unset values fall back to the `AWS_*` variables, which `fly storage create` sets |
+
 ## Logging and errors
 
 The backend writes one JSON object per line to stdout, with `timestamp`, `level`, `module`, `event` and a `request_id` (API requests) or `run_id` (syncs and imports). Set the level with `LOG_LEVEL` (`DEBUG`, `INFO`, `WARN`, `ERROR`; default `INFO`). Emails, phone numbers and secrets are masked.
