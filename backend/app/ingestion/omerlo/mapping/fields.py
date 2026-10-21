@@ -1,8 +1,4 @@
-"""Readers for the parts shared by Omerlo payloads.
-
-Payloads come from outside PULSE, so every reader tolerates missing or malformed
-parts: a value of the wrong type reads as absent instead of raising.
-"""
+"""Readers for Omerlo payload parts; a value of the wrong type reads as absent."""
 
 import html
 import re
@@ -87,11 +83,7 @@ def profile_workspace_id(payload: dict[str, Any]) -> str | None:
 
 
 def contact_identifiers(payload: dict[str, Any]) -> dict[str, list[str]]:
-    """Every email, phone, website domain and LinkedIn URL across locales, normalized.
-
-    Values that cannot be normalized (an invalid email, an impossible phone number)
-    are dropped here; the original stays in the payload.
-    """
+    """Every email, phone, website domain and LinkedIn URL across locales, normalized."""
     contacts = live_entries(payload, "contact")
 
     def values(field: str) -> list[str | None]:

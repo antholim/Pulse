@@ -1,11 +1,4 @@
-"""Map the raw records of one sync run without letting one bad record stop it (#57).
-
-The connector yields a record's metadata as a separate raw record pointing at it
-through `parent_external_id`; it is attached to its parent here. The connector does
-not fetch contents yet: their blocks are expected the same way, as `content_blocks`.
-Kinds that are not entities (workspace, category, event_session) are reference
-data and are skipped.
-"""
+"""Map the raw records of one sync run without letting one bad record stop it (#57)."""
 
 import logging
 from collections.abc import Iterable

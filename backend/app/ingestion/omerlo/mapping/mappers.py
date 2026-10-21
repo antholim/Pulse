@@ -1,25 +1,4 @@
-"""Map Omerlo backoffice detail payloads to PULSE source records (#57).
-
-Each mapper fills the `source_record` columns that come from the payload. Every
-email, phone, website domain and LinkedIn URL found across locales is normalized
-(#26) and kept in `attributes["identifiers"]`; metadata pairs go to `external_ids`.
-
-`domain` comes from `contact[].website` only. `profile.canonical_url` is the
-profile's page on the media site and the workspace's `canonical_domain` is the
-media's own domain, so either would give every organization of a workspace the
-same domain and Tier 1 (#61) would merge them all (#115). Only organizations set
-`domain` and `linkedin`, the columns Tier 1 matches on; other kinds keep theirs
-in `attributes`.
-
-Persons keep only the fields matching and display need (Law 25): first and last
-name, job titles, emails, LinkedIn URL and metadata ids (the issue requires
-metadata for matching). Their phones, addresses, pronoun, photos and biography
-stay in the raw archive (#56).
-
-Other kinds keep their whole payload in `attributes`. Where a mapper validates a
-raw field (a content's flags and `published_at`), the validated value replaces
-the raw one under the same key; the original stays in the raw archive.
-"""
+"""Map Omerlo backoffice detail payloads to PULSE source records (#57)."""
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
