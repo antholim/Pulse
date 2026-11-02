@@ -94,7 +94,7 @@ def versions(session: Session, external_id: str = "org-1") -> list[SourceRecord]
     return list(session.scalars(statement))
 
 
-def link(session: Session, record: SourceRecord) -> Organization:
+def link(session: Session, record: SourceRecord, **evidence) -> Organization:
     organization = Organization(tenant_id=record.tenant_id, display_name="Groupe Exemple")
     session.add(organization)
     session.flush()
@@ -106,6 +106,7 @@ def link(session: Session, record: SourceRecord) -> Organization:
             method="domain",
             confidence=0.9,
             decided_by="tier1:domain",
+            **evidence,
         )
     )
     session.flush()
@@ -214,6 +215,21 @@ def test_a_new_version_keeps_the_organization_link_and_candidates(session, runs)
     assert (copied.method, copied.confidence, copied.decided_by) == ("domain", 0.9, "tier1:domain")
     assert session.get(OrgLink, one.id) is not None
     assert candidates(session) == {("org-1", "org-2", "rejected"), ("org-1", "org-3", "accepted")}
+
+
+def test_a_link_without_evidence_reads_as_an_empty_list(session, runs):
+    # Arrange
+    first = runs.next()
+    upsert_records(session, first, [org()])
+    one = version_as_of(session, first, "org-1")
+
+    # Act
+    link(session, one)
+
+    # Assert
+    stored = session.get(OrgLink, one.id)
+    session.refresh(stored)
+    assert stored.evidence == []
 
 
 def test_a_new_version_keeps_candidate_fields_in_the_shape_of_link_evidence(session, runs):

@@ -69,6 +69,7 @@ class OrgLink(Base):
     confidence: Mapped[float] = mapped_column(Double)
     decided_by: Mapped[str] = mapped_column(Text)
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    evidence: Mapped[list[RuleEvidence | ManualEvidence]] = json_column("[]")
 
 
 class MatchCandidate(Base):
