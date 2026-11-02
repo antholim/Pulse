@@ -22,6 +22,12 @@ repos:
   # Requires `npm ci` in frontend/ so the hooks use the project's pinned tool versions.
   - repo: local
     hooks:
+      - id: ai-declarations
+        name: AI contribution declarations
+        language: system
+        entry: python3 scripts/ai_declarations.py
+        pass_filenames: false
+        always_run: true
       - id: prettier
         name: prettier (frontend)
         language: system
