@@ -1,3 +1,4 @@
+# AI declaration: Below 50% AI (used just to follow instructions)
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
@@ -21,4 +22,4 @@ COPY migrations ./migrations
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", \
-    "--host", "0.0.0.0", "--port", "8000"]
+  "--host", "0.0.0.0", "--port", "8000"]

@@ -1,4 +1,7 @@
-"""Clean PULSE data after mapping and before storage.
+"""
+AI declaration: Below 50% AI
+
+Clean PULSE data after mapping and before storage.
 
 The original raw payload must be archived before mapping and cleaning.
 This module only cleans mapped records and does not handle raw data storage.
