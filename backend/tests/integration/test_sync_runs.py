@@ -208,6 +208,25 @@ def test_running_the_same_sync_twice_creates_no_new_versions(session, sync, full
     assert run.status == "succeeded"
     assert (run.counts["new"], run.counts["changed"], run.counts["removed"]) == (0, 0, 0)
     assert version_count(session) == versions
+    assert recorded_changes(session, run) == {}
+    if full:
+        assert run.counts["unchanged"] == versions
+
+
+def test_cleaned_resync_then_mutation_still_opens_versions(session, sync, fixtures):
+    first = sync(full=True)
+    versions = version_count(session)
+    repeated = sync(full=True)
+    assert repeated.counts["unchanged"] == first.counts["new"]
+    assert recorded_changes(session, repeated) == {}
+    assert version_count(session) == versions
+
+    diff = apply_set(fixtures, DEMO)["tenants"][SLUG]
+    changed = sync(full=True)
+    assert changed.status == "succeeded"
+    assert changed.counts["changed"] == len(ids_of(diff["modified"]))
+    assert of_type(recorded_changes(session, changed), "modified") == set(expected(diff).modified)
+    assert version_count(session) == versions + changed.counts["new"] + changed.counts["changed"]
 
 
 def test_a_failed_run_is_recorded_and_leaves_the_previous_data_intact(
