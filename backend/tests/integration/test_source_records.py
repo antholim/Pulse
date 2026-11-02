@@ -1,3 +1,4 @@
+# AI declaration: Below 50% AI-generated
 """Versioned upsert and as-of query against a real database."""
 
 import time
@@ -5,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.omerlo.mapping.mappers import MappedRecord
@@ -23,6 +24,16 @@ from app.services.source_records import close_unseen, upsert_records, version_as
 pytestmark = pytest.mark.integration
 
 START = datetime(2026, 10, 1, tzinfo=UTC)
+
+NAME_EVIDENCE = {
+    "rule": "name_city",
+    "rule_set_version": "1",
+    "field": "name_normalized",
+    "value": "groupe exemple",
+    "matched_value": "groupe exemple",
+    "matched_record_id": "11111111-1111-1111-1111-111111111111",
+}
+CITY_EVIDENCE = {**NAME_EVIDENCE, "field": "city", "value": "quebec", "matched_value": "quebec"}
 
 
 class Runs:
@@ -84,7 +95,7 @@ def versions(session: Session, external_id: str = "org-1") -> list[SourceRecord]
     return list(session.scalars(statement))
 
 
-def link(session: Session, record: SourceRecord) -> Organization:
+def link(session: Session, record: SourceRecord, **evidence) -> Organization:
     organization = Organization(tenant_id=record.tenant_id, display_name="Groupe Exemple")
     session.add(organization)
     session.flush()
@@ -96,6 +107,7 @@ def link(session: Session, record: SourceRecord) -> Organization:
             method="domain",
             confidence=0.9,
             decided_by="tier1:domain",
+            **evidence,
         )
     )
     session.flush()
@@ -110,7 +122,7 @@ def pair(session: Session, first: SourceRecord, second: SourceRecord, status: st
             left_record_id=left,
             right_record_id=right,
             score=0.8,
-            matched_fields=["name"],
+            matched_fields=[NAME_EVIDENCE],
             status=status,
         )
     )
@@ -204,6 +216,70 @@ def test_a_new_version_keeps_the_organization_link_and_candidates(session, runs)
     assert (copied.method, copied.confidence, copied.decided_by) == ("domain", 0.9, "tier1:domain")
     assert session.get(OrgLink, one.id) is not None
     assert candidates(session) == {("org-1", "org-2", "rejected"), ("org-1", "org-3", "accepted")}
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        [NAME_EVIDENCE, CITY_EVIDENCE],
+        [{"decided_by": "analyst@example.org", "note": "Same company after a rename"}],
+        [{"decided_by": "analyst@example.org"}],
+    ],
+    ids=["rule on two fields", "manual with a note", "manual without a note"],
+)
+def test_a_new_version_keeps_the_evidence_of_its_link(session, runs, evidence):
+    # Arrange
+    first, second = runs.next(), runs.next()
+    upsert_records(session, first, [org()])
+    one = version_as_of(session, first, "org-1")
+    link(session, one, evidence=evidence)
+
+    # Act
+    upsert_records(session, second, [org(name="nouveau nom")])
+
+    # Assert
+    new = version_as_of(session, second, "org-1")
+    assert new.id != one.id
+    assert session.get(OrgLink, new.id).evidence == evidence
+
+
+def test_a_link_without_evidence_reads_as_an_empty_list(session, runs):
+    # Arrange
+    first = runs.next()
+    upsert_records(session, first, [org()])
+    one = version_as_of(session, first, "org-1")
+
+    # Act
+    link(session, one)
+
+    # Assert
+    stored = session.get(OrgLink, one.id)
+    session.refresh(stored)
+    assert stored.evidence == []
+
+
+def test_a_new_version_keeps_candidate_fields_in_the_shape_of_link_evidence(session, runs):
+    # Arrange
+    first, second = runs.next(), runs.next()
+    upsert_records(session, first, [org("org-1"), org("org-2")])
+    pair(
+        session,
+        version_as_of(session, first, "org-1"),
+        version_as_of(session, first, "org-2"),
+        "pending",
+    )
+
+    # Act
+    upsert_records(session, second, [org("org-1", name="nouveau nom"), org("org-2")])
+
+    # Assert
+    new = version_as_of(session, second, "org-1")
+    candidate = session.scalars(
+        select(MatchCandidate).where(
+            or_(MatchCandidate.left_record_id == new.id, MatchCandidate.right_record_id == new.id)
+        )
+    ).one()
+    assert candidate.matched_fields == [NAME_EVIDENCE]
 
 
 def test_two_changes_in_a_row_keep_three_versions_found_by_run(session, runs):

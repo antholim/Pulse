@@ -1,3 +1,4 @@
+# AI declaration: Below 50% AI-generated
 """The database itself enforces the tenancy and versioning rules of data model v1."""
 
 from dataclasses import dataclass
@@ -143,6 +144,27 @@ def test_an_organization_link_cannot_cross_tenants(session, tenant_a, tenant_b):
                 decided_by="test",
             ),
         )
+
+
+@pytest.mark.parametrize("evidence", [{"rule": "domain"}, "domain", 1])
+def test_the_evidence_of_a_link_must_be_a_json_array(session, tenant_a, evidence):
+    record = add_record(session, tenant_a, "org-1")
+    organization = Organization(tenant_id=tenant_a.tenant.id, display_name="Groupe Exemple")
+    session.add(organization)
+    session.flush()
+
+    assert rejected(
+        session,
+        OrgLink(
+            tenant_id=tenant_a.tenant.id,
+            organization_id=organization.id,
+            source_record_id=record.id,
+            method="domain",
+            confidence=1.0,
+            decided_by="test",
+            evidence=evidence,
+        ),
+    )
 
 
 def test_a_match_candidate_cannot_pair_records_of_two_tenants(session, tenant_a, tenant_b):

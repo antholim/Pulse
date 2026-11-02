@@ -1,5 +1,7 @@
+# AI declaration: Below 50% AI-generated
 import uuid
 from datetime import datetime
+from typing import NotRequired, TypedDict
 
 from sqlalchemy import CheckConstraint, DateTime, Double, Index, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -8,6 +10,25 @@ from app.models.base import Base, json_column, one_of, same_tenant_fk, tenant_id
 
 LINK_METHODS = ("domain", "linkedin", "external_id", "name_city", "manual")
 CANDIDATE_STATUSES = ("pending", "accepted", "rejected")
+
+
+class RuleEvidence(TypedDict):
+    """One field a rule matched on; a rule that compares two fields stores two entries."""
+
+    rule: str
+    rule_set_version: str
+    field: str
+    # The normalized value on this record, then on the record version it matched.
+    value: str
+    matched_value: str
+    matched_record_id: str
+
+
+class ManualEvidence(TypedDict):
+    """Who linked a record by hand, stored instead of a rule."""
+
+    decided_by: str
+    note: NotRequired[str]
 
 
 class Organization(Base):
@@ -28,7 +49,7 @@ class OrgLink(Base):
     The version is the primary key, so each version belongs to at most one organization.
     A new version starts unlinked: versioning (#58) must copy the link to it in the same
     transaction that closes the old version. Current membership of an organization joins
-    source_record on valid_to IS NULL.
+    source_record on valid_to IS NULL. The copy keeps the evidence of the original decision.
     """
 
     __tablename__ = "org_link"
@@ -37,6 +58,7 @@ class OrgLink(Base):
         same_tenant_fk("source_record_id", "source_record"),
         CheckConstraint(one_of("method", LINK_METHODS), name="method"),
         CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence_range"),
+        CheckConstraint("jsonb_typeof(evidence) = 'array'", name="evidence_is_array"),
         # An organization's source records (#27); indexes the organization foreign key.
         Index("ix_org_link_organization", "tenant_id", "organization_id"),
     )
@@ -48,6 +70,7 @@ class OrgLink(Base):
     confidence: Mapped[float] = mapped_column(Double)
     decided_by: Mapped[str] = mapped_column(Text)
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    evidence: Mapped[list[RuleEvidence | ManualEvidence]] = json_column("[]")
 
 
 class MatchCandidate(Base):
@@ -78,5 +101,5 @@ class MatchCandidate(Base):
     left_record_id: Mapped[uuid.UUID]
     right_record_id: Mapped[uuid.UUID]
     score: Mapped[float] = mapped_column(Double)
-    matched_fields: Mapped[list] = json_column("[]")
+    matched_fields: Mapped[list[RuleEvidence]] = json_column("[]")
     status: Mapped[str] = mapped_column(Text, server_default="pending")
