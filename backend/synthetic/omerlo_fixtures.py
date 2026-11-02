@@ -128,6 +128,16 @@ def domain_of(url: str | None) -> str | None:
     return url.removeprefix("https://").removeprefix("www.").split("/")[0] if url else None
 
 
+def contact_website_domain(record: dict[str, Any]) -> str | None:
+    """Organization domain for matching: from contact.website, not profile.canonical_url (#115)."""
+    contacts = record.get("contact") or []
+    return domain_of(contacts[0].get("website")) if contacts else None
+
+
+def media_profile_url(site: str, segment: str, slug: str) -> str:
+    return f"https://{site}/{segment}/{slug}"
+
+
 class OmerloFixtureGenerator:
     def __init__(self, seed: int = DEFAULT_SEED, sizes: Sizes | None = None):
         self.seed = seed
@@ -355,12 +365,13 @@ class OmerloFixtureGenerator:
         profile_type = "company" if entity.crm_id else self.rng.choice(["company", "organisme"])
         domain = entity.domain
         website = f"https://www.{domain}" if domain else None
+        profile_url = media_profile_url(ctx.tenant.site, "organisations", slugify(entity.base_name))
         locales = self.locales()
         record = {
             **self.profile_fields(
                 ctx,
                 profile_type=profile_type,
-                url=website,
+                url=profile_url,
                 categories=self.rng.randint(1, 2),
             ),
             "name": name,
@@ -393,7 +404,7 @@ class OmerloFixtureGenerator:
 
     def person(self, ctx: Context, employer: dict[str, Any], journalist: bool) -> dict[str, Any]:
         first, last = self.rng.choice(vocab.FIRST_NAMES), self.rng.choice(vocab.LAST_NAMES)
-        domain = ctx.tenant.site if journalist else domain_of(employer["profile"]["canonical_url"])
+        domain = ctx.tenant.site if journalist else contact_website_domain(employer)
         city = employer["address"][0]["city"]
         slug = slugify(f"{first} {last}")
         locales = self.locales()
@@ -402,7 +413,7 @@ class OmerloFixtureGenerator:
             **self.profile_fields(
                 ctx,
                 profile_type="person",
-                url=f"https://{ctx.tenant.site}/personnes/{slug}",
+                url=media_profile_url(ctx.tenant.site, "personnes", slug),
                 categories=0,
             ),
             "first_name": first,
@@ -588,7 +599,6 @@ class OmerloFixtureGenerator:
         name, changes = self.name_variant(entity)
         record, metadata = self.organization(entity, name, ctx)
         if entity.domain and self.rng.random() < 0.3:
-            record["profile"]["canonical_url"] = None
             for contact in record["contact"]:
                 contact["website"] = contact["email"] = None
             changes.append("missing_domain")

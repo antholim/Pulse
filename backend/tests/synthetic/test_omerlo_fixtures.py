@@ -6,8 +6,11 @@ from synthetic.omerlo_fixtures import (
     GROUND_TRUTH_FILE,
     NOTICE,
     TENANTS,
+    Context,
     OmerloFixtureGenerator,
+    OrgEntity,
     Sizes,
+    contact_website_domain,
     domain_of,
     main,
     write_fixtures,
@@ -230,3 +233,53 @@ def test_ground_truth_keys_identify_organizations_across_tenants(out_dir):
     first, second = (set(ground_truth(out_dir, t.slug)["organizations"].values()) for t in TENANTS)
 
     assert first & second
+
+
+@pytest.mark.parametrize("tenant", TENANTS, ids=lambda t: t.slug)
+def test_organization_canonical_url_is_a_media_profile_page(out_dir, tenant):
+    for org in load(out_dir, tenant.slug, "organizations"):
+        url = org["profile"]["canonical_url"]
+        assert url is not None
+        assert url.startswith(f"https://{tenant.site}/organisations/")
+        website = org["contact"][0]["website"]
+        if website:
+            assert domain_of(website) not in domain_of(url)
+
+
+@pytest.mark.parametrize("tenant", TENANTS, ids=lambda t: t.slug)
+def test_missing_domain_clears_contact_website_and_email_only(out_dir, tenant):
+    organizations = {o["id"]: o for o in load(out_dir, tenant.slug, "organizations")}
+    for cluster in ground_truth(out_dir, tenant.slug)["organization_duplicates"]:
+        if "missing_domain" not in cluster["changes"]:
+            continue
+        duplicate = organizations[cluster["record_ids"][1]]
+        assert duplicate["profile"]["canonical_url"]
+        for contact in duplicate["contact"]:
+            assert contact["website"] is None
+            assert contact["email"] is None
+
+
+def test_employee_email_domain_comes_from_employer_contact_website():
+    gen = OmerloFixtureGenerator(SEED)
+    tenant = TENANTS[0]
+    ctx = Context(
+        tenant=tenant,
+        workspaces=[gen.workspace(tenant, tenant.workspaces[0], 0)],
+        categories=gen.categories(),
+        profile_types=gen.profile_types(),
+    )
+    entity = OrgEntity(
+        key=0,
+        base_name="Groupe Exemple",
+        suffix="inc.",
+        city="Québec",
+        region="Capitale-Nationale",
+        domain="groupe-exemple.qc.ca",
+        linkedin=None,
+        crm_id=None,
+    )
+    employer, _ = gen.organization(entity, "Groupe Exemple inc.", ctx)
+    person = gen.person(ctx, employer, journalist=False)
+
+    assert contact_website_domain(employer) == "groupe-exemple.qc.ca"
+    assert person["contact"][0]["email"].endswith("@groupe-exemple.qc.ca")
