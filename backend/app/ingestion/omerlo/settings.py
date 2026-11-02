@@ -11,3 +11,6 @@ class OmerloSettings(BaseSettings):
     base_url: HttpUrl
     api_key: SecretStr
     timeout_seconds: float = 30.0
+    # Network errors, 429 and 5xx answers are retried, waiting 1, 2, 4... seconds.
+    retry_attempts: int = 4
+    retry_base_delay_seconds: float = 1.0
