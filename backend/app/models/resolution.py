@@ -49,7 +49,7 @@ class OrgLink(Base):
     The version is the primary key, so each version belongs to at most one organization.
     A new version starts unlinked: versioning (#58) must copy the link to it in the same
     transaction that closes the old version. Current membership of an organization joins
-    source_record on valid_to IS NULL.
+    source_record on valid_to IS NULL. The copy keeps the evidence of the original decision.
     """
 
     __tablename__ = "org_link"

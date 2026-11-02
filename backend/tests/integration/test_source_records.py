@@ -33,6 +33,7 @@ NAME_EVIDENCE = {
     "matched_value": "groupe exemple",
     "matched_record_id": "11111111-1111-1111-1111-111111111111",
 }
+CITY_EVIDENCE = {**NAME_EVIDENCE, "field": "city", "value": "quebec", "matched_value": "quebec"}
 
 
 class Runs:
@@ -215,6 +216,31 @@ def test_a_new_version_keeps_the_organization_link_and_candidates(session, runs)
     assert (copied.method, copied.confidence, copied.decided_by) == ("domain", 0.9, "tier1:domain")
     assert session.get(OrgLink, one.id) is not None
     assert candidates(session) == {("org-1", "org-2", "rejected"), ("org-1", "org-3", "accepted")}
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        [NAME_EVIDENCE, CITY_EVIDENCE],
+        [{"decided_by": "analyst@example.org", "note": "Same company after a rename"}],
+        [{"decided_by": "analyst@example.org"}],
+    ],
+    ids=["rule on two fields", "manual with a note", "manual without a note"],
+)
+def test_a_new_version_keeps_the_evidence_of_its_link(session, runs, evidence):
+    # Arrange
+    first, second = runs.next(), runs.next()
+    upsert_records(session, first, [org()])
+    one = version_as_of(session, first, "org-1")
+    link(session, one, evidence=evidence)
+
+    # Act
+    upsert_records(session, second, [org(name="nouveau nom")])
+
+    # Assert
+    new = version_as_of(session, second, "org-1")
+    assert new.id != one.id
+    assert session.get(OrgLink, new.id).evidence == evidence
 
 
 def test_a_link_without_evidence_reads_as_an_empty_list(session, runs):
