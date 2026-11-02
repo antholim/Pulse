@@ -1,4 +1,7 @@
-"""Clean PULSE data after mapping and before storage.
+"""
+AI declaration: Below 50% AI
+
+Clean PULSE data after mapping and before storage.
 
 The original raw payload must be archived before mapping and cleaning.
 This module only cleans mapped records and does not handle raw data storage.
@@ -19,6 +22,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+DUPLICATE_IN_BATCH_REASON = "duplicate in current batch"
 
 MISSING_VALUES = {"", "n/a", "na", "null", "none", "unknown", "-"}
 TRUE_VALUES = {"true", "yes", "oui", "1"}
@@ -406,7 +411,7 @@ def clean_records(records, config, existing_records=None):
                 if fingerprint in historical:
                     reason = "duplicate of historical record"
                 elif fingerprint in seen_new:
-                    reason = "duplicate in current batch"
+                    reason = DUPLICATE_IN_BATCH_REASON
                 else:
                     reason = None
 
@@ -448,7 +453,7 @@ def clean_records(records, config, existing_records=None):
         "received": len(records),
         "cleaned": len(result.cleaned),
         "duplicates": len(result.duplicates),
-        "duplicate_in_batch": result.flag_counts.get("duplicate in current batch", 0),
+        "duplicate_in_batch": result.flag_counts.get(DUPLICATE_IN_BATCH_REASON, 0),
         "duplicate_historical": result.flag_counts.get("duplicate of historical record", 0),
         "unprocessed": len(result.unprocessed),
         "flag_count": len(result.flags),

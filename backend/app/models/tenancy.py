@@ -8,6 +8,7 @@ from app.models.base import Base, json_column, one_of, same_tenant_fk, tenant_id
 
 SOURCE_KINDS = ("omerlo", "csv", "mock")
 SYNC_RUN_STATUSES = ("running", "succeeded", "failed")
+SYNC_RUN_MODES = ("incremental", "full")
 
 
 class Tenant(Base):
@@ -34,7 +35,10 @@ class Source(Base):
     tenant_id: Mapped[uuid.UUID] = tenant_id_column()
     kind: Mapped[str] = mapped_column(Text)
     config: Mapped[dict] = json_column()
+    # Newest updated_at of the source-wide lists (workspaces, categories).
     watermark_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Newest updated_at per workspace and entity kind: {workspace_id: {kind: timestamp}}.
+    workspace_watermarks: Mapped[dict] = json_column()
 
 
 class SyncRun(Base):
@@ -45,6 +49,7 @@ class SyncRun(Base):
         UniqueConstraint("tenant_id", "id"),
         same_tenant_fk("source_id", "source"),
         CheckConstraint(one_of("status", SYNC_RUN_STATUSES), name="status"),
+        CheckConstraint(one_of("mode", SYNC_RUN_MODES), name="mode"),
         CheckConstraint(
             "finished_at IS NULL OR finished_at >= started_at", name="finished_after_start"
         ),
@@ -59,4 +64,7 @@ class SyncRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(Text, server_default="running")
+    mode: Mapped[str] = mapped_column(Text, server_default="incremental")
     counts: Mapped[dict] = json_column()
+    # Why a failed run stopped.
+    error: Mapped[str | None] = mapped_column(Text)

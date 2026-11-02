@@ -1,10 +1,13 @@
 import uuid
 from datetime import UTC, datetime
 
+from app.ingestion.connector import RawRecord
+from app.ingestion.omerlo.mapping.batch import map_records
 from app.ingestion.omerlo.mapping.mappers import MappedRecord
 from app.models import SyncRun
 from app.processing.content_hash import content_hash
 from app.services.source_records import Latest, plan_batch
+from tests.ingestion.omerlo.mapping import payloads
 
 RUN = SyncRun(
     id=uuid.uuid4(),
@@ -77,3 +80,22 @@ def test_a_record_back_after_removal_is_added_and_carries_its_links():
     assert plan.to_close == plan.to_touch == []
     [row] = plan.inserts
     assert plan.carried == [(removed.id, row["id"])]
+
+
+def test_newline_only_attribute_change_after_cleaning_opens_a_version():
+    # Arrange
+    original = payloads.organization() | {"description": "First\nSecond"}
+    changed = original | {"description": "First Second"}
+    (before,) = map_records([RawRecord("organization", "org-1", None, original)]).records
+    current = Latest(uuid.uuid4(), content_hash(before), current=True)
+    (after,) = map_records([RawRecord("organization", "org-1", None, changed)]).records
+
+    # Act
+    plan = plan_batch(RUN, [after], {"org-1": current})
+
+    # Assert
+    assert plan.result.changed == ["org-1"]
+    assert plan.to_close == [current.id]
+    (row,) = plan.inserts
+    assert row["attributes"]["description"] == "First Second"
+    assert row["content_hash"] != current.content_hash

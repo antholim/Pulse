@@ -184,3 +184,142 @@ def test_every_synthetic_record_maps(synthetic_tenant):
     with_website = [r for r in organizations if r.attributes["identifiers"]["domains"]]
     assert with_website
     assert all(r.domain == r.attributes["identifiers"]["domains"][0] for r in with_website)
+
+
+@pytest.mark.parametrize("kind", ["organization", "person", "event", "project", "content"])
+def test_cleaning_runs_for_each_kind_and_deduplicates_only_exact_batch_repeats(kind):
+    builder = getattr(payloads, kind)
+    payload = builder()
+    # This nested field is retained by all five mappers.
+    if kind == "person":
+        payload["first_name"] = "  Marie   Ève  "
+    else:
+        payload["quality_note"] = "  QuÃ©bec   test  "
+    other_id = payload | {"id": "another-id"}
+    changed = payload | ({"last_name": "Changed"} if kind == "person" else {"revision": 2})
+    records = [raw(kind, p) for p in (payload, payload, other_id, changed)]
+
+    result = map_records(records)
+
+    assert result.failures == ()
+    assert len(result.records) == 3
+    assert result.cleaning_flag_counts == {"duplicate in current batch": 1}
+    assert result.records[1].external_id == "another-id"
+    expected = batch.map_record(kind, payload)
+    assert result.records[0].attributes == expected.attributes
+    assert result.records[0].external_ids == expected.external_ids
+    # A fresh batch must not remember the first one's ids.
+    assert len(map_records([raw(kind, payload)]).records) == 1
+
+
+def test_removing_repeats_preserves_the_last_payload_for_versioning():
+    original = payloads.organization()
+    changed = original | {"name": "Changed"}
+    result = map_records([raw("organization", p) for p in (original, changed, original)])
+    assert len(result.records) == 2
+    assert result.records[-1].attributes["name"] == original["name"]
+
+
+@pytest.mark.parametrize("kind", ["organization", "person", "event", "project", "content"])
+def test_cleaning_preserves_nested_text_and_external_identifiers(kind):
+    # Arrange
+    markers = ["n/a", "na", "none", "null", "unknown", "-"]
+    payload = getattr(payloads, kind)()
+    if kind == "person":
+        payload["first_name"] = "Unknown"
+    else:
+        payload |= {
+            "description": "First paragraph.\n\nSecond paragraph.",
+            "markers": markers,
+            "encoding_literal": "QuÃ©bec",
+        }
+    pairs = [{"key": "crm_id", "value": "NA"}]
+    expected = batch.map_record(kind, payload, metadata=pairs)
+
+    # Act
+    result = map_records(
+        [
+            raw(kind, payload),
+            metadata(payload["id"], ("crm_id", "NA"), kind=kind),
+        ]
+    )
+
+    # Assert
+    assert result.failures == ()
+    (record,) = result.records
+    assert record.attributes == expected.attributes
+    assert record.external_ids == {"crm_id": ["NA"]}
+    if kind == "person":
+        assert record.attributes["first_name"] == "Unknown"
+    else:
+        assert record.attributes["description"] == "First paragraph.\n\nSecond paragraph."
+        assert record.attributes["markers"] == markers
+        assert record.attributes["encoding_literal"] == "QuÃ©bec"
+
+
+def test_nested_attribute_changes_are_not_removed_as_duplicates():
+    # Arrange
+    original = payloads.organization() | {"description": "First\nSecond"}
+    changed = original | {"description": "First Second"}
+
+    # Act
+    result = map_records([raw("organization", p) for p in (original, changed)])
+
+    # Assert
+    assert result.failures == ()
+    assert len(result.records) == 2
+    assert result.records[0].attributes["description"] == "First\nSecond"
+    assert result.records[1].attributes["description"] == "First Second"
+    assert result.cleaning_flag_counts.get("duplicate in current batch", 0) == 0
+
+
+@pytest.mark.parametrize("external_id", ["na", "none", "null", "unknown", "-", "N/A"])
+def test_cleaning_missing_required_id_is_a_mapping_failure(external_id, caplog):
+    # Arrange
+    invalid = payloads.organization() | {"id": external_id}
+    valid = payloads.organization() | {"id": "valid-org"}
+
+    # Act
+    with caplog.at_level(logging.WARNING):
+        result = map_records([raw("organization", invalid), raw("organization", valid)])
+
+    # Assert
+    assert [r.external_id for r in result.records] == ["valid-org"]
+    assert result.failures == (
+        MappingFailure(
+            "organization", external_id, "cleaning removed required fields: external_id"
+        ),
+    )
+    assert result.cleaning_flag_counts == {"required field is missing": 1}
+    assert external_id in caplog.text
+
+
+def test_cleaning_missing_required_name_is_a_mapping_failure():
+    # Arrange
+    payload = payloads.organization() | {"name": "Unknown"}
+
+    # Act
+    result = map_records([raw("organization", payload)])
+
+    # Assert
+    assert result.records == ()
+    assert result.failures == (
+        MappingFailure(
+            "organization", "org-1", "cleaning removed required fields: name_normalized"
+        ),
+    )
+    assert result.cleaning_flag_counts == {"required field is missing": 1}
+
+
+def test_cleaning_allows_optional_workspace_and_project_name():
+    # Arrange
+    payload = payloads.project() | {"profile": None, "locales": None}
+
+    # Act
+    result = map_records([raw("project", payload)])
+
+    # Assert
+    assert result.failures == ()
+    (record,) = result.records
+    assert record.workspace_id is None
+    assert record.name_normalized is None

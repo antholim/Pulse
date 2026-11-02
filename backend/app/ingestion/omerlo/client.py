@@ -6,14 +6,18 @@ Every request carries the API key in the `x-api-key` header. The documented
 Errors come back as `{"error": message}`. `get_json` turns them into exceptions
 the sync run can act on: a rejected key or a missing role stops the run (retrying
 cannot help), a missing record is skipped, and other HTTP errors are raised as
-`httpx.HTTPStatusError` for the sync run to retry.
+`httpx.HTTPStatusError`. The client retries network errors and 5xx answers
+before they get here.
 """
 
+import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
 
 from app.ingestion.omerlo.settings import OmerloSettings
+from app.ingestion.retry import RetryTransport
 
 API_KEY_HEADER = "x-api-key"
 
@@ -30,12 +34,25 @@ class OmerloNotFoundError(OmerloAPIError):
     """The record does not exist, for example because it was deleted mid-sync."""
 
 
-def create_omerlo_client(settings: OmerloSettings, **kwargs: Any) -> httpx.Client:
-    """An httpx client for the backoffice API: base URL, API key and timeout set."""
+def create_omerlo_client(
+    settings: OmerloSettings,
+    *,
+    transport: httpx.BaseTransport | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    **kwargs: Any,
+) -> httpx.Client:
+    """An httpx client for the backoffice API: base URL, API key, timeout and retries set."""
+    retrying = RetryTransport(
+        transport or httpx.HTTPTransport(),
+        attempts=settings.retry_attempts,
+        base_delay=settings.retry_base_delay_seconds,
+        sleep=sleep,
+    )
     return httpx.Client(
         base_url=str(settings.base_url),
         headers={API_KEY_HEADER: settings.api_key.get_secret_value()},
         timeout=settings.timeout_seconds,
+        transport=retrying,
         **kwargs,
     )
 

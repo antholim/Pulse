@@ -1,55 +1,35 @@
-"""Keep all PULSE cleaning rules in one place.
+"""
 
-These field names are examples. Update them to match actual mapper outputs.
+AI declaration: Below 50% AI (used only for initial example)
+
+Cleaning rules for scalar columns emitted by the Omerlo mappers.
+
+The batch mapper preserves attributes and external_ids as mapped, outside cleaning.
+Both remain part of duplicate fingerprints and version hashes.
 """
 
 from app.processing.cleaning import CleaningConfig, FieldRule
 
 CONFIGS = {
-    "event": CleaningConfig(
+    kind: CleaningConfig(
         fields={
+            "kind": FieldRule(required=True, allowed_values=(kind,)),
             "external_id": FieldRule(required=True),
-            "name": FieldRule(required=True),
-            "start_at": FieldRule(
-                type="datetime",
-                input_formats=(
-                    # Canadian format
-                    "%d/%m/%Y %H:%M",
-                    # American format
-                    "%m-%d-%Y %H:%M",
-                ),
-                source_timezone="America/Toronto",
-            ),
-            "active": FieldRule(type="boolean"),
-            "status": FieldRule(
-                allowed_values=("planned", "cancelled", "completed"),
-                categories={
-                    "prévu": "planned",
-                    "planifié": "planned",
-                    "planned": "planned",
-                    "annulé": "cancelled",
-                    "cancelled": "cancelled",
-                    "terminé": "completed",
-                    "completed": "completed",
-                },
-            ),
+            "workspace_id": FieldRule(),
+            "name_normalized": FieldRule(required=kind in ("organization", "person")),
+            "domain": FieldRule(),
+            "linkedin": FieldRule(),
         },
-        unique_by=("external_id",),
-    ),
-    "organization": CleaningConfig(
-        fields={
-            "external_id": FieldRule(required=True),
-            "name": FieldRule(required=True),
-            "email": FieldRule(type="email"),
-        },
-        unique_by=("external_id",),
-    ),
+        # Compare the complete cleaned record, including external_id. An id alone
+        # would hide changed payloads. Never supply historical records here.
+        unique_by=(),
+    )
+    for kind in ("organization", "person", "event", "project", "content")
 }
 
 
 def get_cleaning_config(entity_kind):
     """Return the rules for this entity kind or explain what is missing."""
-
     if entity_kind not in CONFIGS:
         raise ValueError("No cleaning config for entity kind: " + entity_kind)
     return CONFIGS[entity_kind]
