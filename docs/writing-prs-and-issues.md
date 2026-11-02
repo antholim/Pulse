@@ -12,11 +12,21 @@ new format. This applies to anyone writing them, people and AI tools alike.
   `Add security headers and configurable CORS origins (#22)`.
   An optional `feat:` / `fix:` / `test:` / `docs:` prefix is fine.
 - Add a body only when the reason for the change is not obvious from the diff.
-- **Never add `Co-Authored-By` trailers** or any other attribution line.
+- **AI acknowledgement:** SOEN 490 requires AI use to be acknowledged on every
+  commit, PR and issue (unacknowledged use counts as plagiarism). If an AI tool
+  helped with a commit, end it with one trailer line naming the tool and what it
+  did: `AI-assisted: Claude Code drafted this change; the author reviewed it.`
+  Leave it out when no AI tool was used.
+- No `Co-Authored-By` trailers for AI tools: they add the tool as a GitHub
+  co-author and blur the per-person contribution stats used for grading.
 
 ## Pull requests
 
 Use `.github/pull_request_template.md` and keep its sections:
+
+- **[LLL] PRs:** a PR carrying your Release 2 Life-Long Learning log must start
+  its title with `[LLL]` and include the `## 🧠 Life-Long Learning Log` section
+  from the course outline, or the evaluator will not see it.
 
 - **Title:** the same style as a commit message, ending with the issue number:
   `Map Omerlo payloads to normalized source records (#57)`.
@@ -41,6 +51,13 @@ Backlog issues are generated from `scripts/tickets/data.py` (see `CLAUDE.md`).
 Hand-written ones use the templates in `.github/ISSUE_TEMPLATE/` and the same
 sections as the generated tickets: Goal or User story, Context, Acceptance
 criteria, Tasks, Dependencies, Out of scope, Definition of done.
+
+- If an AI tool helped write an issue, say so in one line at the end
+  (`AI assistance: ...`), the same as in PRs.
+- **[LLL] issues:** each student's Release 1 spike is an issue titled
+  `[LLL] [Architecture: <Subsystem>] Spike - <Technical Unknown>`, on the
+  Release 1 milestone, with the Architectural Context, Knowledge Gap, Targeted
+  Learning Plan and Definition of Done sections from the course outline.
 
 ## Code comments
 
