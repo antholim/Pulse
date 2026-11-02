@@ -271,3 +271,55 @@ def test_nested_attribute_changes_are_not_removed_as_duplicates():
     assert result.records[0].attributes["description"] == "First\nSecond"
     assert result.records[1].attributes["description"] == "First Second"
     assert result.cleaning_flag_counts.get("duplicate in current batch", 0) == 0
+
+
+@pytest.mark.parametrize("external_id", ["na", "none", "null", "unknown", "-", "N/A"])
+def test_cleaning_missing_required_id_is_a_mapping_failure(external_id, caplog):
+    # Arrange
+    invalid = payloads.organization() | {"id": external_id}
+    valid = payloads.organization() | {"id": "valid-org"}
+
+    # Act
+    with caplog.at_level(logging.WARNING):
+        result = map_records([raw("organization", invalid), raw("organization", valid)])
+
+    # Assert
+    assert [r.external_id for r in result.records] == ["valid-org"]
+    assert result.failures == (
+        MappingFailure(
+            "organization", external_id, "cleaning removed required fields: external_id"
+        ),
+    )
+    assert result.cleaning_flag_counts == {"required field is missing": 1}
+    assert external_id in caplog.text
+
+
+def test_cleaning_missing_required_name_is_a_mapping_failure():
+    # Arrange
+    payload = payloads.organization() | {"name": "Unknown"}
+
+    # Act
+    result = map_records([raw("organization", payload)])
+
+    # Assert
+    assert result.records == ()
+    assert result.failures == (
+        MappingFailure(
+            "organization", "org-1", "cleaning removed required fields: name_normalized"
+        ),
+    )
+    assert result.cleaning_flag_counts == {"required field is missing": 1}
+
+
+def test_cleaning_allows_optional_workspace_and_project_name():
+    # Arrange
+    payload = payloads.project() | {"profile": None, "locales": None}
+
+    # Act
+    result = map_records([raw("project", payload)])
+
+    # Assert
+    assert result.failures == ()
+    (record,) = result.records
+    assert record.workspace_id is None
+    assert record.name_normalized is None
