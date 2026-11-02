@@ -191,6 +191,7 @@ def test_a_successful_run_records_its_counts_and_advances_the_watermarks(session
     assert (run.status, run.mode, run.started_at, run.finished_at) == ("succeeded", "full", T1, T2)
     assert run.counts == {
         "fetched": 1,
+        "cleaning_flags": {},
         "new": 1,
         "changed": 1,
         "unchanged": 2,
@@ -246,3 +247,15 @@ def test_a_storage_error_keeps_only_the_fetched_count(session, stored):
     assert run.status == "failed"
     assert run.counts == {**dict.fromkeys(sync_runs.COUNT_KEYS, 0), "fetched": 1}
     assert len(run.error) == sync_runs.MAX_ERROR_LENGTH
+
+
+def test_cleaning_counts_are_persisted_and_only_unique_records_reach_storage(session, stored):
+    _, upsert, _ = stored
+    record = raw("organization", "o1", T1)
+    connector = FakeConnector(community={("organization", "ws-1"): [record, record]})
+
+    run = run_sync(session, source(), connector, archive=None, now=clock())
+
+    assert run.status == "succeeded"
+    assert run.counts["cleaning_flags"] == {"duplicate in current batch": 1}
+    assert len(upsert.call_args.args[2]) == 1

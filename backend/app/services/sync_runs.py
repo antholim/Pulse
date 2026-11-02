@@ -126,6 +126,7 @@ def store(
     """
     session.refresh(source, with_for_update=True)
     mapped = map_records(fetched.records)
+    run.counts = {**(run.counts or {}), "cleaning_flags": mapped.cleaning_flag_counts}
     upserted = upsert_records(session, run, mapped.records)
     removed: list[str] = []
     if run.mode == "full":
