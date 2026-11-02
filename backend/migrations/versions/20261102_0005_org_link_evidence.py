@@ -1,4 +1,4 @@
-# AI declaration: 50% or more AI-generated
+# AI declaration: Below 50% AI-generated
 """Store the evidence behind each organization link.
 
 Revision ID: 0005
@@ -28,7 +28,11 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+    op.create_check_constraint(
+        op.f("ck_org_link_evidence_is_array"), "org_link", "jsonb_typeof(evidence) = 'array'"
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint(op.f("ck_org_link_evidence_is_array"), "org_link", type_="check")
     op.drop_column("org_link", "evidence")

@@ -1,7 +1,11 @@
-"""Cleaning rules for the columns emitted by the Omerlo mappers.
+"""
 
-Attributes and external_ids are recursively cleaned as extra fields. Their nested
-lists and dictionaries must retain their shapes; they are not scalar field rules.
+AI declaration: Below 50% AI (used only for initial example)
+
+Cleaning rules for scalar columns emitted by the Omerlo mappers.
+
+The batch mapper preserves attributes and external_ids as mapped, outside cleaning.
+Both remain part of duplicate fingerprints and version hashes.
 """
 
 from app.processing.cleaning import CleaningConfig, FieldRule

@@ -1,4 +1,4 @@
-# AI declaration: 50% or more AI-generated
+# AI declaration: Below 50% AI-generated
 """Store mapped records as source_record versions, keeping every earlier version."""
 
 import uuid

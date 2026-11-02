@@ -259,3 +259,27 @@ def test_cleaning_counts_are_persisted_and_only_unique_records_reach_storage(ses
     assert run.status == "succeeded"
     assert run.counts["cleaning_flags"] == {"duplicate in current batch": 1}
     assert len(upsert.call_args.args[2]) == 1
+
+
+def test_required_cleaning_failure_does_not_abort_sync_or_remove_stored_record(session, stored):
+    # Arrange
+    _, upsert, close = stored
+    connector = FakeConnector(
+        community={
+            ("organization", "ws-1"): [
+                raw("organization", "NA", T1),
+                raw("organization", "valid-org", T1),
+            ],
+        }
+    )
+
+    # Act
+    run = run_sync(session, source(), connector, archive=None, full=True, now=clock())
+
+    # Assert
+    assert run.status == "succeeded"
+    assert run.counts["failed"] == 1
+    assert run.counts["cleaning_flags"] == {"required field is missing": 1}
+    assert [r.external_id for r in upsert.call_args.args[2]] == ["valid-org"]
+    assert close.call_args.kwargs["keep"] == {"NA"}
+    session.rollback.assert_not_called()

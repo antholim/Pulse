@@ -1,4 +1,4 @@
-# AI declaration: 50% or more AI-generated
+# AI declaration: Below 50% AI-generated
 """Versioned upsert and as-of query against a real database."""
 
 import time

@@ -58,6 +58,7 @@ class OrgLink(Base):
         same_tenant_fk("source_record_id", "source_record"),
         CheckConstraint(one_of("method", LINK_METHODS), name="method"),
         CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence_range"),
+        CheckConstraint("jsonb_typeof(evidence) = 'array'", name="evidence_is_array"),
         # An organization's source records (#27); indexes the organization foreign key.
         Index("ix_org_link_organization", "tenant_id", "organization_id"),
     )
