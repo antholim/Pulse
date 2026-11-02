@@ -184,3 +184,38 @@ def test_every_synthetic_record_maps(synthetic_tenant):
     with_website = [r for r in organizations if r.attributes["identifiers"]["domains"]]
     assert with_website
     assert all(r.domain == r.attributes["identifiers"]["domains"][0] for r in with_website)
+
+
+@pytest.mark.parametrize("kind", ["organization", "person", "event", "project", "content"])
+def test_cleaning_runs_for_each_kind_and_deduplicates_only_exact_batch_repeats(kind):
+    builder = getattr(payloads, kind)
+    payload = builder()
+    # This nested field is retained by all five mappers.
+    if kind == "person":
+        payload["first_name"] = "  Marie   Ève  "
+    else:
+        payload["quality_note"] = "  QuÃ©bec   test  "
+    other_id = payload | {"id": "another-id"}
+    changed = payload | ({"last_name": "Changed"} if kind == "person" else {"revision": 2})
+    records = [raw(kind, p) for p in (payload, payload, other_id, changed)]
+
+    result = map_records(records)
+
+    assert result.failures == ()
+    assert len(result.records) == 3
+    assert result.cleaning_flag_counts == {"duplicate in current batch": 1}
+    assert result.records[1].external_id == "another-id"
+    if kind == "person":
+        assert result.records[0].attributes["first_name"] == "Marie Ève"
+    else:
+        assert result.records[0].attributes["quality_note"] == "Québec test"
+    # A fresh batch must not remember the first one's ids.
+    assert len(map_records([raw(kind, payload)]).records) == 1
+
+
+def test_removing_repeats_preserves_the_last_payload_for_versioning():
+    original = payloads.organization()
+    changed = original | {"name": "Changed"}
+    result = map_records([raw("organization", p) for p in (original, changed, original)])
+    assert len(result.records) == 2
+    assert result.records[-1].attributes["name"] == original["name"]

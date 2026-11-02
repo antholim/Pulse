@@ -2,12 +2,14 @@
 
 import logging
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from app.ingestion.connector import RawRecord
 from app.ingestion.omerlo.mapping.mappers import MappedRecord, MappingError, map_record
 from app.models.records import ENTITY_KINDS
+from app.processing.cleaning import clean_records, record_fingerprint
+from app.processing.cleaning_config import get_cleaning_config
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ class MappingFailure:
 class MappingResult:
     records: tuple[MappedRecord, ...]
     failures: tuple[MappingFailure, ...]
+    cleaning_flag_counts: dict[str, int] = field(default_factory=dict)
 
 
 def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
@@ -50,7 +53,24 @@ def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
             # A payload shape no reader anticipated; keep the traceback to fix the mapper.
             logger.exception("Unexpected error mapping Omerlo %s %s", kind, key)
             failures.append(MappingFailure(kind, key, f"unexpected {type(error).__name__}"))
-    return MappingResult(tuple(mapped), tuple(failures))
+    cleaned: list[MappedRecord] = []
+    flag_counts: dict[str, int] = {}
+    seen: set[str] = set()
+    # Keep the last repeat, matching the versioned upsert's last-occurrence policy.
+    for record in reversed(mapped):
+        # No stored records: versioning alone decides whether a resync changed.
+        result = clean_records([asdict(record)], get_cleaning_config(record.kind))
+        for reason, count in result.flag_counts.items():
+            flag_counts[reason] = flag_counts.get(reason, 0) + count
+        value = result.cleaned[0]
+        fingerprint = record_fingerprint(value)
+        if fingerprint in seen:
+            reason = "duplicate in current batch"
+            flag_counts[reason] = flag_counts.get(reason, 0) + 1
+            continue
+        seen.add(fingerprint)
+        cleaned.append(MappedRecord(**value))
+    return MappingResult(tuple(reversed(cleaned)), tuple(failures), flag_counts)
 
 
 def group_companions(records: list[RawRecord]) -> dict[tuple[str, str], list[Any]]:
