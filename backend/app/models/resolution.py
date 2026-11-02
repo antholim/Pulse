@@ -1,5 +1,7 @@
+# AI declaration: Below 50% AI-generated
 import uuid
 from datetime import datetime
+from typing import NotRequired, TypedDict
 
 from sqlalchemy import CheckConstraint, DateTime, Double, Index, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -8,6 +10,25 @@ from app.models.base import Base, json_column, one_of, same_tenant_fk, tenant_id
 
 LINK_METHODS = ("domain", "linkedin", "external_id", "name_city", "manual")
 CANDIDATE_STATUSES = ("pending", "accepted", "rejected")
+
+
+class RuleEvidence(TypedDict):
+    """One field a rule matched on; a rule that compares two fields stores two entries."""
+
+    rule: str
+    rule_set_version: str
+    field: str
+    # The normalized value on this record, then on the record version it matched.
+    value: str
+    matched_value: str
+    matched_record_id: str
+
+
+class ManualEvidence(TypedDict):
+    """Who linked a record by hand, stored instead of a rule."""
+
+    decided_by: str
+    note: NotRequired[str]
 
 
 class Organization(Base):
@@ -78,5 +99,5 @@ class MatchCandidate(Base):
     left_record_id: Mapped[uuid.UUID]
     right_record_id: Mapped[uuid.UUID]
     score: Mapped[float] = mapped_column(Double)
-    matched_fields: Mapped[list] = json_column("[]")
+    matched_fields: Mapped[list[RuleEvidence]] = json_column("[]")
     status: Mapped[str] = mapped_column(Text, server_default="pending")
