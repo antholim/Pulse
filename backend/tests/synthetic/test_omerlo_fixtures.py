@@ -1,3 +1,5 @@
+# AI contribution: Below 50% AI-generated
+
 import json
 
 import pytest

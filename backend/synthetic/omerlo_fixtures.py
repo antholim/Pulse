@@ -9,6 +9,8 @@ entries, served apart from the record), `manifest.json`, and a dev-only
 The same seed always produces byte-identical files. All data is invented.
 """
 
+# AI contribution: Below 50% AI-generated
+
 import argparse
 import copy
 import json
