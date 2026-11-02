@@ -58,11 +58,17 @@ def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
     seen: set[str] = set()
     # Keep the last repeat, matching the versioned upsert's last-occurrence policy.
     for record in reversed(mapped):
+        values = asdict(record)
+        # Preserve mapped text and identifiers without recursive cleaning.
+        attributes = values.pop("attributes")
+        external_ids = values.pop("external_ids")
         # No stored records: versioning alone decides whether a resync changed.
-        result = clean_records([asdict(record)], get_cleaning_config(record.kind))
+        result = clean_records([values], get_cleaning_config(record.kind))
         for reason, count in result.flag_counts.items():
             flag_counts[reason] = flag_counts.get(reason, 0) + count
         value = result.cleaned[0]
+        value["attributes"] = attributes
+        value["external_ids"] = external_ids
         fingerprint = record_fingerprint(value)
         if fingerprint in seen:
             reason = "duplicate in current batch"
