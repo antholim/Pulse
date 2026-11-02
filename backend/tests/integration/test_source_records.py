@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Versioned upsert and as-of query against a real database."""
 
 import time

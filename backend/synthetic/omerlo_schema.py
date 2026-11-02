@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Shapes of the Omerlo backoffice API resources, used to validate synthetic fixtures.
 
 Fields follow the backoffice documentation (developers.omerlo.com/docs/backoffice,

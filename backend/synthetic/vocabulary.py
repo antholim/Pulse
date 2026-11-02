@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Word lists for synthetic Quebec data.
 
 Organization names are built by combining common surnames, sectors and places,

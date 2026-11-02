@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Store mapped records as source_record versions, keeping every earlier version."""
 
 import uuid

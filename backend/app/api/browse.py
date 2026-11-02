@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Read-only endpoints for the sync runs page: runs, their changes and record history."""
 
 import uuid

@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import type { FieldChange } from "../../services/api";
 import { formatValue } from "./format";
 
