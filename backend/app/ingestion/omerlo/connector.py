@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Omerlo backoffice API connector: fetches every resource PULSE needs as raw records.
 
 Community records (organizations, people, projects, events) are listed per

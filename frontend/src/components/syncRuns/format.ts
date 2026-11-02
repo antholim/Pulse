@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import type { ChangeType, SyncRun } from "../../services/api";
 
 export const CHANGE_TYPES: ChangeType[] = ["added", "modified", "removed"];

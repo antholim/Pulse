@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import { type FormEvent, useEffect, useState } from "react";
 import {
   getRecordHistory,

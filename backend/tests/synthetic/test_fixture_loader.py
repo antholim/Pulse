@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 from synthetic.fixture_loader import generate_fixtures, load_fixtures
 from synthetic.omerlo_fixtures import OmerloFixtureGenerator, Sizes, write_fixtures
 

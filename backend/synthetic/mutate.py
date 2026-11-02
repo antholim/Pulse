@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Apply a named set of adds, edits and deletes to synthetic Omerlo fixtures.
 
     uv run python -m synthetic.mutate --set demo           # fixtures in synthetic/out

@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """The interface every PULSE data source implements (ADR D6).
 
 A connector only fetches. It yields raw records exactly as the source returned

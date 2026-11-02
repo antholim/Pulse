@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Load synthetic Omerlo fixtures, from files or straight from the generator."""
 
 import json

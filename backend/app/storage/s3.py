@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 import uuid
 from typing import Any
 from urllib.parse import urlsplit
