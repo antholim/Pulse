@@ -16,4 +16,10 @@ Closes #<!-- story or task number -->
 - [ ] Reviewed by at least one teammate
 
 ## AI assistance
-<!-- If AI tools helped with this PR, say which and how (required by SOEN 490). Otherwise write "None". -->
+<!-- Required by SOEN 490. Pick one level for the code this PR adds or changes:
+     No substantial AI-generated code | Below 50% AI-generated | 50% or more AI-generated
+     List the files AI substantially helped with, and say in one sentence what it did. -->
+AI contribution:
+
+AI-assisted files:
+-
