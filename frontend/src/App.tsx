@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ErrorMessage } from "./components/ErrorMessage";
+import { SyncRunsPage } from "./components/syncRuns/SyncRunsPage";
 import { getHealth } from "./services/api";
 
 function App() {
@@ -16,11 +17,11 @@ function App() {
   }, []);
 
   return (
-    <main style={{ padding: "2rem", fontFamily: "Arial" }}>
+    <main style={{ padding: "1.5rem 2rem", fontFamily: "Arial" }}>
       <h1>PULSE Dashboard</h1>
       <p>Ecosystem Intelligence Platform</p>
-      <h2>Backend status: {status}</h2>
-      {error !== null && <ErrorMessage error={error} />}
+      <p>Backend status: {status}</p>
+      {error !== null ? <ErrorMessage error={error} /> : <SyncRunsPage />}
     </main>
   );
 }

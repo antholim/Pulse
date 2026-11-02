@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api import browse
 from app.core.database import DatabaseNotConfiguredError, check_database
 from app.core.errors import UnhandledErrorMiddleware, register_exception_handlers
 from app.core.logging import configure_logging, get_logger
@@ -43,6 +44,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 # Added last so it wraps the other middleware and every response carries the request id.
 app.add_middleware(RequestContextMiddleware)
+app.include_router(browse.router)
 
 
 @app.get("/api/health")
