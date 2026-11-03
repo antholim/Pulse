@@ -15,7 +15,7 @@ from app.processing.normalization import (
     PHONE_WARNING_IMPOSSIBLE,
     PHONE_WARNING_UNPARSEABLE,
     PhoneResult,
-    city_aliases,
+    city_config,
     email_domain,
     legal_suffixes,
     normalize_city,
@@ -192,6 +192,11 @@ def test_person_variants_share_a_key(left, right):
         ("Three Rivers", "trois rivieres"),
         ("Stoneham", "stoneham"),
         ("Lévis", "levis"),
+        ("Ville de Saint-Georges", "saint georges"),
+        ("Ville d'Alma", "alma"),
+        ("Town of Mount Royal", "mount royal"),
+        ("Ville de", "ville de"),
+        ("Villeroy", "villeroy"),
     ],
 )
 def test_normalize_city(raw, expected):
@@ -207,6 +212,8 @@ def test_normalize_city(raw, expected):
         ("Saint-Georges", "St-Georges"),
         ("Sainte-Marie", "Ste Marie"),
         ("Montréal", "City of Montreal"),
+        ("Rimouski", "Ville de Rimouski"),
+        ("City of Quebec", "Ville de Québec"),
     ],
 )
 def test_city_variants_share_a_key(left, right):
@@ -218,14 +225,19 @@ def test_different_cities_keep_different_keys():
     assert normalize_city("Saint-Georges") != normalize_city("Lévis")
 
 
-def test_city_aliases_map_every_name_to_its_city():
+def test_city_config_normalizes_prefixes_and_aliases():
     # Act
-    aliases = city_aliases()
+    config = city_config()
 
     # Assert
-    assert aliases["ville de quebec"] == "quebec"
-    assert aliases["quebec"] == "quebec"
-    assert aliases["three rivers"] == "trois rivieres"
+    assert config.prefixes == ("ville de", "city of", "town of", "ville d")
+    assert config.aliases["quebec city"] == "quebec"
+    assert config.aliases["quebec"] == "quebec"
+    assert config.aliases["three rivers"] == "trois rivieres"
+
+
+def test_city_config_loader_is_cached():
+    assert city_config() is city_config()
 
 
 @pytest.fixture
@@ -233,31 +245,46 @@ def aliases_file(tmp_path, monkeypatch):
     """A temporary aliases config, loaded instead of the real one for one test."""
     config = tmp_path / "city_aliases.toml"
     monkeypatch.setattr(norm, "_CITY_ALIASES_PATH", config)
-    norm._load_city_aliases.cache_clear()
+    norm._load_city_config.cache_clear()
     yield config
-    norm._load_city_aliases.cache_clear()
+    norm._load_city_config.cache_clear()
 
 
-def test_city_aliases_reject_one_name_for_two_cities(aliases_file):
+def test_city_config_without_prefixes_keeps_the_whole_name(aliases_file):
+    # Arrange
+    aliases_file.write_text('[aliases]\nquebec = ["Quebec City"]\n')
+
+    # Act / Assert
+    assert normalize_city("Ville de Lévis") == "ville de levis"
+
+
+def test_city_config_rejects_one_name_for_two_cities(aliases_file):
     # Arrange
     aliases_file.write_text('[aliases]\nquebec = ["La Capitale"]\nlevis = ["La Capitale"]\n')
 
     # Act / Assert
     with pytest.raises(ValueError, match="invalid alias"):
-        city_aliases()
+        city_config()
 
 
 @pytest.mark.parametrize(
     "content",
-    ["", "[aliases]\n", 'aliases = "quebec"\n', '[aliases]\nquebec = "Quebec City"\n'],
+    [
+        "",
+        "[aliases]\n",
+        'aliases = "quebec"\n',
+        '[aliases]\nquebec = "Quebec City"\n',
+        'prefixes = "Ville de"\n[aliases]\nquebec = ["Quebec City"]\n',
+        'prefixes = ["Ville de", " "]\n[aliases]\nquebec = ["Quebec City"]\n',
+    ],
 )
-def test_city_aliases_reject_a_malformed_config(aliases_file, content):
+def test_city_config_rejects_a_malformed_config(aliases_file, content):
     # Arrange
     aliases_file.write_text(content)
 
     # Act / Assert
     with pytest.raises(ValueError):
-        city_aliases()
+        city_config()
 
 
 @pytest.mark.parametrize(

@@ -1,11 +1,12 @@
 # AI declaration: 50% or more AI-generated
-# Other names of one city, mapped to a single key by normalize_city.
+# City names that normalize_city cannot match on spelling alone.
+# Accents, case, hyphens and St/Ste are already handled in code, so a city with no other
+# name needs no entry here.
+
+# Leading words dropped from any city: "Ville de Lévis" and "City of Levis" read as "levis".
+prefixes = ["Ville de", "Ville d'", "City of", "Town of"]
+
 # Each key is the city; its list holds the other names it goes by, in any spelling.
-# Hyphens, accents, case and St/Ste abbreviations are already handled in code.
 [aliases]
-quebec = ["Quebec City", "Québec City", "Ville de Québec", "City of Quebec"]
-montreal = ["Ville de Montréal", "City of Montreal"]
-levis = ["Ville de Lévis", "City of Levis"]
-saguenay = ["Ville de Saguenay", "City of Saguenay"]
-sherbrooke = ["Ville de Sherbrooke", "City of Sherbrooke"]
-"trois rivieres" = ["Ville de Trois-Rivières", "City of Trois-Rivieres", "Three Rivers"]
+quebec = ["Quebec City"]
+"trois rivieres" = ["Three Rivers"]
