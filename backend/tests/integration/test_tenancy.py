@@ -158,6 +158,15 @@ def test_another_tenants_id_cannot_be_fetched(session, tenant_a, tenant_b, model
     assert by_query is None
 
 
+def test_get_one_returns_the_bound_tenants_row(session, tenant_a):
+    # Act
+    with bound_to_tenant(session, tenant_a.tenant.id):
+        run = session.get_one(SyncRun, tenant_a.rows[SyncRun].id)
+
+    # Assert
+    assert run is tenant_a.rows[SyncRun]
+
+
 def test_get_one_raises_for_another_tenants_id(session, tenant_a, tenant_b):
     # Act / Assert
     with bound_to_tenant(session, tenant_a.tenant.id), pytest.raises(NoResultFound):
@@ -202,7 +211,7 @@ def test_updates_and_deletes_only_touch_the_bound_tenant(session, tenant_a, tena
     # Assert
     with system_access(session):
         rows = session.execute(select(Organization.tenant_id, Organization.display_name))
-        names = dict(rows.tuples().all())
+        names = dict(rows.all())
     assert names == {tenant_a.tenant.id: "Renamed", tenant_b.tenant.id: "Tenant B inc."}
 
 
@@ -238,6 +247,32 @@ def test_new_rows_get_the_bound_tenant(session, tenant_a):
     assert organization.tenant_id == tenant_a.tenant.id
 
 
+def test_a_row_with_the_bound_tenant_can_be_added(session, tenant_a):
+    # Arrange
+    organization = Organization(tenant_id=tenant_a.tenant.id, display_name="Explicit")
+
+    # Act
+    with bound_to_tenant(session, tenant_a.tenant.id):
+        session.add(organization)
+        session.flush()
+
+    # Assert
+    assert organization.id is not None
+
+
+def test_expired_attributes_reload_inside_the_tenant(session, tenant_a):
+    # Arrange
+    run = tenant_a.rows[SyncRun]
+    session.expire(run)
+
+    # Act
+    with bound_to_tenant(session, tenant_a.tenant.id):
+        status = run.status
+
+    # Assert
+    assert status == "running"
+
+
 def test_a_row_of_another_tenant_cannot_be_added(session, tenant_a, tenant_b):
     # Arrange
     stray = Organization(tenant_id=tenant_b.tenant.id, display_name="Stray")
@@ -265,6 +300,34 @@ def test_a_row_cannot_move_to_another_tenant(session, tenant_a, tenant_b):
         organization = session.get(Organization, tenant_a.rows[Organization].id)
         organization.tenant_id = tenant_b.tenant.id
         with pytest.raises(TenantContextError, match="move"):
+            session.flush()
+        session.rollback()
+
+
+def test_the_bound_tenants_rows_can_be_changed_and_deleted(session, tenant_a):
+    # Arrange
+    organization = tenant_a.rows[Organization]
+    candidate = tenant_a.rows[MatchCandidate]
+
+    # Act
+    with bound_to_tenant(session, tenant_a.tenant.id):
+        organization.display_name = "Renamed"
+        session.delete(candidate)
+        session.flush()
+
+    # Assert
+    with bound_to_tenant(session, tenant_a.tenant.id):
+        assert session.scalars(select(MatchCandidate)).all() == []
+
+
+def test_a_row_of_another_tenant_cannot_be_deleted(session, tenant_a, tenant_b):
+    # Arrange: B's row was loaded with system access, so the session still holds it.
+    candidate = tenant_b.rows[MatchCandidate]
+
+    # Act / Assert
+    with bound_to_tenant(session, tenant_a.tenant.id):
+        session.delete(candidate)
+        with pytest.raises(TenantContextError, match="delete"):
             session.flush()
         session.rollback()
 
