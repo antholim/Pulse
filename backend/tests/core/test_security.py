@@ -209,3 +209,22 @@ def test_disconnect_messages_pass_through_the_size_limit():
 
     # Assert
     assert received == [{"type": "http.disconnect"}]
+
+
+@pytest.mark.parametrize("header", [b"\xb2", b"abc", b"-1"])
+def test_a_malformed_content_length_is_left_to_the_server(header):
+    # Arrange
+    reached = []
+
+    async def app(scope, receive, send):
+        reached.append(scope["path"])
+
+    middleware = RequestSizeLimitMiddleware(app, max_bytes=10)
+    headers = [(b"content-length", header)]
+    scope = {"type": "http", "method": "POST", "path": "/", "headers": headers}
+
+    # Act
+    asyncio.run(middleware(scope, None, None))
+
+    # Assert
+    assert reached == ["/"]

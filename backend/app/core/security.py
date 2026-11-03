@@ -53,7 +53,8 @@ class RequestSizeLimitMiddleware:
             return
 
         declared = Headers(scope=scope).get("content-length", "")
-        if declared.isdigit() and int(declared) > self.max_bytes:
+        # isdigit() alone accepts characters like "²" that int() rejects.
+        if declared.isascii() and declared.isdigit() and int(declared) > self.max_bytes:
             response = error_response(413, "payload_too_large", self._message())
             await response(scope, receive, send)
             return
