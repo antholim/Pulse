@@ -147,7 +147,8 @@ def test_watermarks_advance_to_the_newest_update_and_never_go_back():
 
 @pytest.fixture
 def session(mocker):
-    return mocker.MagicMock()
+    # A real info dict, where the session keeps its tenant scope.
+    return mocker.MagicMock(info={})
 
 
 @pytest.fixture

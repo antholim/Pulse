@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_session_factory
+from app.core.tenancy import system_access
 from app.models import Source, Tenant
 
 MOCK_OMERLO_BASE_URL = "http://localhost:8100/api"
@@ -59,7 +60,7 @@ def seed(session: Session) -> list[str]:
 
 
 def main() -> None:
-    with get_session_factory()() as session:
+    with get_session_factory()() as session, system_access(session):
         created = seed(session)
         session.commit()
     print("\n".join(f"Created {item}" for item in created) or "Nothing to seed")
