@@ -326,6 +326,23 @@ def test_a_file_import_counts_rejected_rows_and_never_removes_them(session, stor
     assert run.counts["failed"] == 1
     assert [r.external_id for r in upsert.call_args.args[2]] == ["organization:1"]
     assert close.call_args.kwargs == {"keep": {"organization:2"}, "kinds": ("organization",)}
+    assert run.counts["failures"] == [
+        {"id": "organization:2", "reason": "row 3: email is not an email address"}
+    ]
+
+
+def test_only_the_first_failures_are_kept_on_the_run(session, stored):
+    # Arrange
+    rows = "".join(f"{n},Org {n},bad\n" for n in range(sync_runs.MAX_REPORTED_FAILURES + 5))
+    data = ("id,name,email\n" + rows).encode()
+    reader = FileReader(FileConnector(data, "organizations.csv", "organization"))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, now=clock())
+
+    # Assert
+    assert run.counts["failed"] == sync_runs.MAX_REPORTED_FAILURES + 5
+    assert len(run.counts["failures"]) == sync_runs.MAX_REPORTED_FAILURES
 
 
 def test_a_file_import_archives_the_file_without_counting_or_mapping_it(session, stored):

@@ -24,6 +24,8 @@ from app.storage.raw_records import archive_records
 
 COUNT_KEYS = ("fetched", "new", "changed", "unchanged", "removed", "failed")
 MAX_ERROR_LENGTH = 2000
+# Failures listed on the run with their reason; all of them are counted.
+MAX_REPORTED_FAILURES = 100
 
 # {workspace_id: {entity_kind: newest updated_at}}
 WorkspaceWatermarks = dict[str, dict[str, datetime]]
@@ -177,6 +179,11 @@ def store(
     session.refresh(source, with_for_update=True)
     mapped = reader.map(fetched.records)
     run.counts = {**(run.counts or {}), "cleaning_flags": mapped.cleaning_flag_counts}
+    if mapped.failures:
+        run.counts["failures"] = [
+            {"id": failure.external_id, "reason": failure.reason}
+            for failure in mapped.failures[:MAX_REPORTED_FAILURES]
+        ]
     upserted = upsert_records(session, run, mapped.records)
     removed: list[str] = []
     if run.mode == "full":

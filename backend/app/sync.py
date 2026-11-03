@@ -24,6 +24,9 @@ from app.seed import MOCK_OMERLO_BASE_URL
 from app.services.sync_runs import COUNT_KEYS, OmerloReader, run_sync
 from app.storage.settings import create_archive
 
+# File sources are imported with app.import_file instead.
+SYNCED_KINDS = ("omerlo", "mock")
+
 
 class SyncCommandError(Exception):
     """The command cannot start a sync, e.g. the tenant or source does not exist."""
@@ -41,9 +44,11 @@ def find_tenant(session: Session, key: str) -> Tenant:
     return tenant
 
 
-def find_source(session: Session, tenant: Tenant, source_id: str | None) -> Source:
-    """The tenant's source with that id, or its only source when no id is given."""
-    statement = select(Source).where(Source.tenant_id == tenant.id)
+def find_source(
+    session: Session, tenant: Tenant, source_id: str | None, kinds: tuple[str, ...]
+) -> Source:
+    """The tenant's source of one of `kinds` with that id, or its only one when no id is given."""
+    statement = select(Source).where(Source.tenant_id == tenant.id, Source.kind.in_(kinds))
     if source_id is not None:
         try:
             statement = statement.where(Source.id == uuid.UUID(source_id))
@@ -88,7 +93,7 @@ def sync(session: Session, tenant_key: str, source_id: str | None, *, full: bool
     with system_access(session):
         tenant = find_tenant(session, tenant_key)
     with bound_to_tenant(session, tenant.id):
-        source = find_source(session, tenant, source_id)
+        source = find_source(session, tenant, source_id, SYNCED_KINDS)
         settings = omerlo_settings(source, tenant)
         with create_omerlo_client(settings) as client:
             connector = OmerloConnector(client, workspace_ids=source.config.get("workspace_ids"))
