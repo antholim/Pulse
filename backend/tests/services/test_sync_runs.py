@@ -8,8 +8,7 @@ import httpx
 import pytest
 
 from app.ingestion.connector import RawRecord
-from app.ingestion.omerlo.mapping.batch import MappingResult
-from app.ingestion.omerlo.mapping.mappers import MappedRecord
+from app.ingestion.mapped import MappedRecord, MappingResult
 from app.models import Source
 from app.services import sync_runs
 from app.services.source_records import UpsertResult

@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from app.core.logging import logged_run
 from app.core.tenancy import bound_to_tenant
 from app.ingestion.connector import RawRecord, parse_timestamp
+from app.ingestion.mapped import MappingResult
 from app.ingestion.omerlo.connector import OmerloConnector
-from app.ingestion.omerlo.mapping.batch import MappingResult, map_records
+from app.ingestion.omerlo.mapping.batch import map_records
 from app.models import Source, SyncRun
 from app.services.record_changes import record_changes
 from app.services.source_records import close_unseen, upsert_records

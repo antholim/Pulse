@@ -2,33 +2,23 @@
 
 import logging
 from collections.abc import Iterable
-from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.ingestion.connector import RawRecord
-from app.ingestion.omerlo.mapping.mappers import MappedRecord, MappingError, map_record
+from app.ingestion.mapped import (
+    MappedRecord,
+    MappingError,
+    MappingFailure,
+    MappingResult,
+    clean_mapped,
+)
+from app.ingestion.omerlo.mapping.mappers import map_record
 from app.models.records import ENTITY_KINDS
-from app.processing.cleaning import DUPLICATE_IN_BATCH_REASON, clean_records, record_fingerprint
-from app.processing.cleaning_config import get_cleaning_config
 
 logger = logging.getLogger(__name__)
 
 METADATA_SUFFIX = "_metadata"
 CONTENT_BLOCKS = "content_blocks"
-
-
-@dataclass(frozen=True)
-class MappingFailure:
-    entity_kind: str
-    external_id: str
-    reason: str
-
-
-@dataclass(frozen=True)
-class MappingResult:
-    records: tuple[MappedRecord, ...]
-    failures: tuple[MappingFailure, ...]
-    cleaning_flag_counts: dict[str, int] = field(default_factory=dict)
 
 
 def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
@@ -53,44 +43,7 @@ def map_records(raw_records: Iterable[RawRecord]) -> MappingResult:
             # A payload shape no reader anticipated; keep the traceback to fix the mapper.
             logger.exception("Unexpected error mapping Omerlo %s %s", kind, key)
             failures.append(MappingFailure(kind, key, f"unexpected {type(error).__name__}"))
-    cleaned: list[MappedRecord] = []
-    flag_counts: dict[str, int] = {}
-    seen: set[str] = set()
-    configs = {kind: get_cleaning_config(kind) for kind in {record.kind for record in mapped}}
-    # Keep the last repeat, matching the versioned upsert's last-occurrence policy.
-    for record in reversed(mapped):
-        config = configs[record.kind]
-        # Read only scalar columns; leave nested data untouched without copying it.
-        values = {name: getattr(record, name) for name in config.fields}
-        # No stored records: versioning alone decides whether a resync changed.
-        result = clean_records([values], config)
-        for reason, count in result.flag_counts.items():
-            flag_counts[reason] = flag_counts.get(reason, 0) + count
-        missing = [
-            flag["field"] for flag in result.flags if flag["reason"] == "required field is missing"
-        ]
-        if missing:
-            reason = "cleaning removed required fields: " + ", ".join(missing)
-            logger.warning(
-                "Could not clean Omerlo %s %s: %s", record.kind, record.external_id, reason
-            )
-            failures.append(MappingFailure(record.kind, record.external_id, reason))
-            continue
-        value = result.cleaned[0]
-        fingerprint = record_fingerprint(
-            {
-                **value,
-                "attributes": record.attributes,
-                "external_ids": record.external_ids,
-            }
-        )
-        if fingerprint in seen:
-            reason = DUPLICATE_IN_BATCH_REASON
-            flag_counts[reason] = flag_counts.get(reason, 0) + 1
-            continue
-        seen.add(fingerprint)
-        cleaned.append(replace(record, **value))
-    return MappingResult(tuple(reversed(cleaned)), tuple(failures), flag_counts)
+    return clean_mapped(mapped, failures)
 
 
 def group_companions(records: list[RawRecord]) -> dict[tuple[str, str], list[Any]]:

@@ -1,9 +1,10 @@
 """Map Omerlo backoffice detail payloads to PULSE source records."""
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from typing import Any
 
+from app.ingestion.mapped import MappedRecord, MappingError
 from app.ingestion.omerlo.mapping.fields import (
     cities,
     contact_identifiers,
@@ -28,25 +29,6 @@ from app.processing.normalization import (
 )
 
 PERSON_IDENTIFIERS = ("emails", "linkedin")
-
-
-class MappingError(ValueError):
-    """The payload lacks a field the record cannot exist without."""
-
-
-@dataclass(frozen=True)
-class MappedRecord:
-    """The columns of a `source_record` version that come from the payload."""
-
-    kind: str
-    external_id: str
-    workspace_id: str | None
-    name_normalized: str | None
-    domain: str | None = None
-    linkedin: str | None = None
-    city: str | None = None
-    external_ids: dict[str, list[str]] = field(default_factory=dict)
-    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 def map_organization(payload: dict[str, Any]) -> MappedRecord:

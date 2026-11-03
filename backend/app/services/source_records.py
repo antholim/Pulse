@@ -10,7 +10,7 @@ from sqlalchemy import Select, bindparam, or_, select, text, update
 from sqlalchemy.dialects.postgresql import ARRAY, UUID, distinct_on
 from sqlalchemy.orm import Session
 
-from app.ingestion.omerlo.mapping.mappers import MappedRecord
+from app.ingestion.mapped import MappedRecord
 from app.models import SourceRecord, SyncRun
 from app.processing.content_hash import content_hash
 
