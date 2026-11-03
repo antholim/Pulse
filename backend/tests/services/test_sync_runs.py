@@ -268,12 +268,13 @@ def test_cleaning_counts_are_persisted_and_only_unique_records_reach_storage(ses
 class FakeReader:
     """A source that is not Omerlo: fixed records, mapped by a fixed result."""
 
-    def __init__(self, records, mapped):
+    def __init__(self, records, mapped, kinds=None):
         self.records = records
         self.mapped = mapped
+        self.kinds = kinds
 
     def fetch(self, source, *, full):
-        return Fetched(records=list(self.records))
+        return Fetched(records=list(self.records), kinds=self.kinds)
 
     def map(self, records):
         return self.mapped
@@ -294,6 +295,18 @@ def test_any_reader_can_feed_a_sync_run(session, stored):
     assert run.status == "succeeded"
     assert upsert.call_args.args[2] == (mapped,)
     assert run.counts["fetched"] == 1
+
+
+def test_a_full_run_only_removes_records_of_the_kinds_it_read(session, stored):
+    # Arrange
+    _, _, close = stored
+    reader = FakeReader([], MappingResult((), ()), kinds=("person",))
+
+    # Act
+    run_sync(session, source(), reader, archive=None, full=True, now=clock())
+
+    # Assert
+    assert close.call_args.kwargs["kinds"] == ("person",)
 
 
 def test_required_cleaning_failure_does_not_abort_sync_or_remove_stored_record(session, stored):

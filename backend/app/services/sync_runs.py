@@ -37,6 +37,8 @@ class Fetched:
     # Newest updated_at seen in the source-wide lists, and per workspace and kind.
     source_newest: datetime | None = None
     workspace_newest: WorkspaceWatermarks = field(default_factory=dict)
+    # Entity kinds a full run may mark removed; None means every kind of the source.
+    kinds: tuple[str, ...] | None = None
 
 
 class SourceReader(Protocol):
@@ -157,7 +159,9 @@ def store(
     upserted = upsert_records(session, run, mapped.records)
     removed: list[str] = []
     if run.mode == "full":
-        removed = close_unseen(session, run, keep={f.external_id for f in mapped.failures})
+        removed = close_unseen(
+            session, run, keep={f.external_id for f in mapped.failures}, kinds=fetched.kinds
+        )
     # Reads the versions this run opened and closed, so it comes after both.
     detect_changes(session, run)
     advance_watermarks(source, fetched)

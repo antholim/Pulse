@@ -167,11 +167,18 @@ def apply_plan(session: Session, run: SyncRun, plan: Plan) -> None:
         session.execute(COPY_MATCH_CANDIDATES, params)
 
 
-def close_unseen(session: Session, run: SyncRun, *, keep: Collection[str] = ()) -> list[str]:
+def close_unseen(
+    session: Session,
+    run: SyncRun,
+    *,
+    keep: Collection[str] = (),
+    kinds: Collection[str] | None = None,
+) -> list[str]:
     """After a full sync, close and mark removed every current version `run` did not see.
 
     `keep` holds external ids that were fetched but could not be mapped, so they are not
-    taken for removed. Returns the external ids closed.
+    taken for removed. `kinds`, when given, limits removal to the entity kinds the run
+    read in full. Returns the external ids closed.
     """
     statement = (
         update(SourceRecord)
@@ -186,6 +193,8 @@ def close_unseen(session: Session, run: SyncRun, *, keep: Collection[str] = ()) 
     )
     if keep:
         statement = statement.where(SourceRecord.external_id.not_in(list(keep)))
+    if kinds is not None:
+        statement = statement.where(SourceRecord.kind.in_(list(kinds)))
     rows = session.execute(statement, execution_options={"synchronize_session": False})
     return sorted(rows.scalars())
 
