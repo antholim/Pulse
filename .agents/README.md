@@ -1,17 +1,21 @@
-# ai-checklist
+# Agent skills
 
-An agent skill that checks your branch, commits and pull request against the
+Shared skills for AI agents, one folder each under `skills/`.
+
+## ai-checklist
+
+`skills/ai-checklist/SKILL.md` is an agent skill that checks your branch, commits and pull request against the
 SOEN 490 AI-use rules (`AI_USAGE.md` and `docs/writing-prs-and-issues.md`), and
 helps you add your own AI declarations.
 
 It only declares files you wrote, asks you the level for each one, and changes
 nothing on GitHub without your yes.
 
-## Before you start
+### Before you start
 
 You need Python 3, the GitHub CLI signed in (`gh auth status`), and Claude Code.
 
-## Steps
+### Steps
 
 1. **Go to the repo root and switch to your branch.**
 
@@ -68,13 +72,13 @@ You need Python 3, the GitHub CLI signed in (`gh auth status`), and Claude Code.
 
    No output and exit code 0 means every file is declared.
 
-## Catch up on earlier work
+### Catch up on earlier work
 
 Ask "Backfill my AI declarations". The agent goes through the files still
 waiting on you and your earlier merged PRs, one batch at a time, with the same
 questions as steps 5 and 6.
 
-## Without Claude Code
+### Without Claude Code
 
 Other agents: tell them to read `.agents/skills/ai-checklist/SKILL.md` and
 follow it. Or do it by hand:
