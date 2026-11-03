@@ -1,6 +1,5 @@
+# AI contribution: Below 50% AI-generated
 """
-AI declaration: Below 50% AI
-
 Clean PULSE data after mapping and before storage.
 
 The original raw payload must be archived before mapping and cleaning.

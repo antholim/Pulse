@@ -49,13 +49,11 @@ backend/app/ingestion/omerlo/mapping/fields.py
 backend/app/ingestion/omerlo/mapping/mappers.py
 backend/app/models/base.py
 backend/app/models/changes.py
-backend/app/models/resolution.py
 backend/app/seed.py
 backend/tests/ingestion/omerlo/mapping/payloads.py
 backend/tests/ingestion/omerlo/mapping/test_batch.py
 backend/tests/ingestion/omerlo/mapping/test_mappers.py
 backend/tests/integration/conftest.py
-backend/tests/integration/test_constraints.py
 backend/tests/integration/test_migrations.py
 backend/tests/integration/test_seed.py
 backend/tests/models/test_schema.py
@@ -90,9 +88,6 @@ frontend/src/App.tsx
 frontend/src/services/api.ts
 
 # TristanGirardi
-backend/app/processing/cleaning.py
-backend/app/processing/cleaning_config.py
-backend/tests/test_cleaning.py
 
 # AbdelrahmanWM, Mohamad Addasi
 backend/app/models/records.py

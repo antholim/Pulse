@@ -1,6 +1,5 @@
+# AI contribution: Below 50% AI-generated
 """
-
-AI declaration: Below 50% AI (used only for initial example)
 
 Cleaning rules for scalar columns emitted by the Omerlo mappers.
 
