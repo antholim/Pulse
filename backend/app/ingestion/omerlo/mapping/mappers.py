@@ -15,6 +15,7 @@ from app.ingestion.omerlo.mapping.fields import (
     id_text,
     live_entries,
     metadata_ids,
+    only,
     profile_workspace_id,
     text,
     timestamp,
@@ -43,6 +44,7 @@ class MappedRecord:
     name_normalized: str | None
     domain: str | None = None
     linkedin: str | None = None
+    city: str | None = None
     external_ids: dict[str, list[str]] = field(default_factory=dict)
     attributes: dict[str, Any] = field(default_factory=dict)
 
@@ -53,6 +55,7 @@ def map_organization(payload: dict[str, Any]) -> MappedRecord:
     if name is None:
         raise MappingError("organization has no name")
     identifiers = contact_identifiers(payload)
+    attributes = profile_attributes(payload, identifiers)
     return MappedRecord(
         kind="organization",
         external_id=record_id,
@@ -60,7 +63,9 @@ def map_organization(payload: dict[str, Any]) -> MappedRecord:
         name_normalized=normalize_organization_name(name),
         domain=first(identifiers["domains"]),
         linkedin=first(identifiers["linkedin"]),
-        attributes=profile_attributes(payload, identifiers),
+        # Addresses in different cities leave it empty; all of them stay in attributes.
+        city=only(attributes["cities"]),
+        attributes=attributes,
     )
 
 

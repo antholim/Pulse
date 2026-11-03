@@ -7,11 +7,11 @@ from typing import Any
 
 from app.ingestion.connector import parse_timestamp
 from app.processing.normalization import (
+    normalize_city,
     normalize_domain,
     normalize_email,
     normalize_linkedin,
     normalize_phone,
-    normalize_text,
 )
 
 # Line breaks and block tags separate words; inline tags like <b> sit inside them.
@@ -65,6 +65,11 @@ def first(values: Iterable[str | None]) -> str | None:
     return next((value for value in values if value is not None), None)
 
 
+def only(values: list[str]) -> str | None:
+    """The value when there is exactly one, so a choice between several is never guessed."""
+    return values[0] if len(values) == 1 else None
+
+
 def grouped(pairs: Iterable[tuple[str | None, str | None]]) -> dict[str, list[str]]:
     """Values by key in first-seen order, dropping pairs with a missing key or value."""
     groups: dict[str, list[str]] = {}
@@ -103,7 +108,7 @@ def contact_identifiers(payload: dict[str, Any]) -> dict[str, list[str]]:
 
 def cities(payload: dict[str, Any]) -> list[str]:
     """The normalized city of every address, for the name plus city match."""
-    return unique(normalize_text(text(a.get("city"))) for a in live_entries(payload, "address"))
+    return unique(normalize_city(text(a.get("city"))) for a in live_entries(payload, "address"))
 
 
 def metadata_ids(entries: Any) -> dict[str, list[str]]:

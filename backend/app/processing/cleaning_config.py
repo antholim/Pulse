@@ -19,6 +19,7 @@ CONFIGS = {
             "name_normalized": FieldRule(required=kind in ("organization", "person")),
             "domain": FieldRule(),
             "linkedin": FieldRule(),
+            "city": FieldRule(),
         },
         # Compare the complete cleaned record, including external_id. An id alone
         # would hide changed payloads. Never supply historical records here.
