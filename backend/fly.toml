@@ -1,0 +1,39 @@
+# PULSE API on Fly.io. Deploy from backend/: fly deploy
+# Secrets: `fly mpg attach` sets DATABASE_URL, `fly storage create` sets the AWS_* keys the
+# archive falls back to, and OMERLO_BASE_URL / OMERLO_API_KEY are set with `fly secrets set`.
+
+app = 'pulse-api'
+primary_region = 'yyz'
+
+[build]
+
+[deploy]
+  # Runs in a temporary machine with the app's secrets; a failed migration stops the deploy.
+  release_command = 'alembic upgrade head'
+  release_command_timeout = '5m'
+
+[env]
+  LOG_LEVEL = 'INFO'
+  CORS_ORIGINS = 'https://pulse-ui.fly.dev'
+  ARCHIVE_BACKEND = 's3'
+  ARCHIVE_BUCKET = 'pulse-raw-archive'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # /api/health does not touch the database, so a database outage does not restart the API.
+  [[http_service.checks]]
+    grace_period = '10s'
+    interval = '30s'
+    method = 'GET'
+    path = '/api/health'
+    timeout = '5s'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory = '512mb'
