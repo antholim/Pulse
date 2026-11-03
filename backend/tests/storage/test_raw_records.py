@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """archive_records and read_run with the database mocked; tests/integration covers the queries."""
 
 import uuid

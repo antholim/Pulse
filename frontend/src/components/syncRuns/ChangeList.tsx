@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import { useState } from "react";
 import type { ChangeType, RecordChange } from "../../services/api";
 import { FieldChanges } from "./FieldChanges";

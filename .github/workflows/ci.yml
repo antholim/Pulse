@@ -34,8 +34,14 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - run: pip install pre-commit
+      - run: pip install pre-commit pytest
       - run: pre-commit run --all-files --show-diff-on-failure
+      - run: python -m pytest scripts/tests
+      # Files may leave the pending list but not join it: new code is declared straight away.
+      - name: AI declarations against main
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          python scripts/ai_declarations.py --base FETCH_HEAD
 
   backend-tests:
     name: Backend tests

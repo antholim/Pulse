@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Seeded generator of synthetic Omerlo backoffice API fixtures for two tenants.
 
     uv run python -m synthetic.omerlo_fixtures --seed 490 --out synthetic/out

@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """A mock of the Omerlo backoffice API that serves synthetic fixtures.
 
 It behaves like the backoffice API where PULSE's connector depends on it (wiki

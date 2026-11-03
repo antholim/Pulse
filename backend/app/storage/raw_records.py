@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Archive a sync run's raw records and read them back for reprocessing."""
 
 import json

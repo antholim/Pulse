@@ -1,4 +1,4 @@
-# AI declaration: Below 50% AI-generated
+# AI contribution: Below 50% AI-generated
 import uuid
 from datetime import datetime
 from typing import NotRequired, TypedDict

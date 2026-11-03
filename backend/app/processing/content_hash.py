@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Fingerprint a mapped record, so a sync can tell a changed record from an unchanged one."""
 
 import hashlib

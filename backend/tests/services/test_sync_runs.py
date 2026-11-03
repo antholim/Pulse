@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Sync run orchestration with the database mocked; tests/integration runs it for real."""
 
 import uuid

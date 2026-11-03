@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Field-level differences between two versions of a source record."""
 
 from collections.abc import Mapping

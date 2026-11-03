@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Run one sync of a tenant's source and print the recorded sync run.
 
 uv run python -m app.sync --tenant demo-capitale            # incremental

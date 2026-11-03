@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """The sync runs page endpoints, over two real sync runs against the mock server."""
 
 # The sync fixtures are imported from test_sync_runs; pytest injects them by name.
