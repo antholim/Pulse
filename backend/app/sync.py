@@ -21,7 +21,7 @@ from app.ingestion.omerlo.connector import OmerloConnector
 from app.ingestion.omerlo.settings import OmerloSettings
 from app.models import Source, SyncRun, Tenant
 from app.seed import MOCK_OMERLO_BASE_URL
-from app.services.sync_runs import COUNT_KEYS, run_sync
+from app.services.sync_runs import COUNT_KEYS, OmerloReader, run_sync
 from app.storage.settings import create_archive
 
 
@@ -92,7 +92,7 @@ def sync(session: Session, tenant_key: str, source_id: str | None, *, full: bool
         settings = omerlo_settings(source, tenant)
         with create_omerlo_client(settings) as client:
             connector = OmerloConnector(client, workspace_ids=source.config.get("workspace_ids"))
-            return run_sync(session, source, connector, create_archive(), full=full)
+            return run_sync(session, source, OmerloReader(connector), create_archive(), full=full)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

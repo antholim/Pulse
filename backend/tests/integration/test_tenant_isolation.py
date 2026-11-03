@@ -22,7 +22,7 @@ from app.ingestion.omerlo.connector import OmerloConnector
 from app.main import app
 from app.models import Source, SourceRecord, SyncRun, Tenant
 from app.services import browse, record_changes, source_records
-from app.services.sync_runs import run_sync
+from app.services.sync_runs import OmerloReader, run_sync
 from app.storage.raw_records import read_run
 from tests.integration.test_sync_runs import (  # noqa: F401
     Clock,
@@ -63,7 +63,8 @@ def synced(session, mock_app, archive) -> dict[str, Synced]:
         session.add(source)
         session.commit()
         with mock_client(mock_app, slug) as client:
-            run = run_sync(session, source, OmerloConnector(client), archive, full=True, now=clock)
+            reader = OmerloReader(OmerloConnector(client))
+            run = run_sync(session, source, reader, archive, full=True, now=clock)
         assert run.status == "succeeded"
         ids = set(
             session.scalars(

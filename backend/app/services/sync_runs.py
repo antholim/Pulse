@@ -4,6 +4,7 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Protocol
 
 from sqlalchemy.orm import Session
 
@@ -11,7 +12,7 @@ from app.core.logging import logged_run
 from app.core.tenancy import bound_to_tenant
 from app.ingestion.connector import RawRecord, parse_timestamp
 from app.ingestion.omerlo.connector import OmerloConnector
-from app.ingestion.omerlo.mapping.batch import map_records
+from app.ingestion.omerlo.mapping.batch import MappingResult, map_records
 from app.models import Source, SyncRun
 from app.services.record_changes import record_changes
 from app.services.source_records import close_unseen, upsert_records
@@ -37,6 +38,25 @@ class Fetched:
     workspace_newest: WorkspaceWatermarks = field(default_factory=dict)
 
 
+class SourceReader(Protocol):
+    """Fetches a source's raw records for one run and maps them to source records."""
+
+    def fetch(self, source: Source, *, full: bool) -> Fetched: ...
+
+    def map(self, records: list[RawRecord]) -> MappingResult: ...
+
+
+@dataclass(frozen=True)
+class OmerloReader:
+    connector: OmerloConnector
+
+    def fetch(self, source: Source, *, full: bool) -> Fetched:
+        return fetch(self.connector, source, full=full)
+
+    def map(self, records: list[RawRecord]) -> MappingResult:
+        return map_records(records)
+
+
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -44,7 +64,7 @@ def utc_now() -> datetime:
 def run_sync(
     session: Session,
     source: Source,
-    connector: OmerloConnector,
+    reader: SourceReader,
     archive: PayloadArchive,
     *,
     full: bool = False,
@@ -72,12 +92,12 @@ def run_sync(
         try:
             with logged_run("sync", str(source.id), str(run.id)) as logged:
                 try:
-                    fetched = fetch(connector, source, full=full)
+                    fetched = reader.fetch(source, full=full)
                     counts["fetched"] = len(fetched.records)
                     archive_records(session, archive, run, fetched.records)
                     # Kept even if storing fails, so the run can be reprocessed from the archive.
                     session.commit()
-                    counts.update(store(session, run, source, fetched, detect_changes))
+                    counts.update(store(session, run, source, fetched, reader, detect_changes))
                     finish(run, "succeeded", counts, now())
                     session.commit()
                 finally:
@@ -122,6 +142,7 @@ def store(
     run: SyncRun,
     source: Source,
     fetched: Fetched,
+    reader: SourceReader,
     detect_changes: ChangeDetector,
 ) -> dict[str, int]:
     """Map and store the fetched records as versions and advance the watermarks.
@@ -130,7 +151,7 @@ def store(
     two syncs of one source never write at the same time.
     """
     session.refresh(source, with_for_update=True)
-    mapped = map_records(fetched.records)
+    mapped = reader.map(fetched.records)
     run.counts = {**(run.counts or {}), "cleaning_flags": mapped.cleaning_flag_counts}
     upserted = upsert_records(session, run, mapped.records)
     removed: list[str] = []
