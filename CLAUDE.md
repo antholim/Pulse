@@ -95,6 +95,12 @@ Tests mirror source layout: `backend/tests/core/` tests `backend/app/core/`; fro
 
 `src/services/api.ts` is the API client; base URL comes from `VITE_API_URL` (default `http://localhost:8000`). Vitest uses jsdom with `src/test/setup.ts`.
 
+## Deployment (Fly.io)
+
+- `backend/fly.toml` (app `pulse-api`) and `frontend/fly.toml` (app `pulse-ui`); run `fly deploy` from each folder. Steps, secrets and rollback are on the wiki's "Deployment Plan and Infrastructure" page.
+- The API runs `alembic upgrade head` as its release command, so a failed migration stops the deploy. `DATABASE_URL` from `fly mpg attach` uses `postgres://`; `sqlalchemy_url()` in `app/core/database.py` maps it to the psycopg driver.
+- The UI is built with `frontend/Dockerfile.prod` (static files served by nginx on port 8080). `VITE_API_URL` is a build argument because Vite inlines it, so changing the API URL needs a rebuild. `frontend/Dockerfile` stays the dev server used by compose.
+
 ## Team bot architecture
 
 Logic lives in `domain/`, `services/` and `formatting.py` (testable without Discord); `cogs/` stay thin. Each scheduled job is a cog method returning what it posted, called by both its `tasks.loop` and a `/run` subcommand in `cogs/run.py`. To add a command: new cog with async `setup(bot)`, add it to `EXTENSIONS` in `bot.py`, give every command a `description`, and add the cog class to `HELP_SECTIONS` in `formatting.py` (a test enforces both). It deploys to Fly.io from CI on pushes to `main`.
