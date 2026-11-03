@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.api.browse import database as browse_database
 from app.core import database
+from app.core.tenancy import TenantSession
 from app.main import app
 from app.models import SourceRecord
 from app.services.browse import label
@@ -69,7 +70,7 @@ def test_endpoints_answer_503_without_a_database(monkeypatch):
 
 def test_unknown_kind_is_rejected():
     # Arrange
-    app.dependency_overrides[browse_database] = lambda: None
+    app.dependency_overrides[browse_database] = TenantSession
     client = TestClient(app)
 
     # Act
