@@ -41,6 +41,8 @@ class Fetched:
     workspace_newest: WorkspaceWatermarks = field(default_factory=dict)
     # Entity kinds a full run may mark removed; None means every kind of the source.
     kinds: tuple[str, ...] | None = None
+    # Archived with the run but neither counted nor mapped, e.g. an imported file.
+    archive_only: list[RawRecord] = field(default_factory=list)
 
 
 class SourceReader(Protocol):
@@ -67,8 +69,11 @@ class FileReader:
     connector: FileConnector
 
     def fetch(self, source: Source, *, full: bool) -> Fetched:
-        records = list(self.connector.fetch_since(None))
-        return Fetched(records=records, kinds=(self.connector.layout.kind,))
+        return Fetched(
+            records=list(self.connector.fetch_since(None)),
+            kinds=(self.connector.layout.kind,),
+            archive_only=[self.connector.file_record()],
+        )
 
     def map(self, records: list[RawRecord]) -> MappingResult:
         # Rejected rows count as failed, so a full import does not take them for removed.
@@ -112,7 +117,8 @@ def run_sync(
                 try:
                     fetched = reader.fetch(source, full=full)
                     counts["fetched"] = len(fetched.records)
-                    archive_records(session, archive, run, fetched.records)
+                    archived = [*fetched.records, *fetched.archive_only]
+                    archive_records(session, archive, run, archived)
                     # Kept even if storing fails, so the run can be reprocessed from the archive.
                     session.commit()
                     counts.update(store(session, run, source, fetched, reader, detect_changes))

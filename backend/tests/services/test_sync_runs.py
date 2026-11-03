@@ -328,6 +328,22 @@ def test_a_file_import_counts_rejected_rows_and_never_removes_them(session, stor
     assert close.call_args.kwargs == {"keep": {"organization:2"}, "kinds": ("organization",)}
 
 
+def test_a_file_import_archives_the_file_without_counting_or_mapping_it(session, stored):
+    # Arrange
+    archive, upsert, _ = stored
+    data = b"id,name\n1,Acme\n"
+    reader = FileReader(FileConnector(data, "organizations.csv", "organization"))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, now=clock())
+
+    # Assert
+    archived = archive.call_args.args[3]
+    assert [r.entity_kind for r in archived] == ["organization", "import_file"]
+    assert run.counts["fetched"] == 1
+    assert len(upsert.call_args.args[2]) == 1
+
+
 def test_required_cleaning_failure_does_not_abort_sync_or_remove_stored_record(session, stored):
     # Arrange
     _, upsert, close = stored

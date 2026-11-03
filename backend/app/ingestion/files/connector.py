@@ -4,10 +4,11 @@
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import PurePath
 
 from app.ingestion.connector import RawRecord
 from app.ingestion.files.columns import LAYOUTS
-from app.ingestion.files.reader import FileRow, ImportFileError, file_format, read_file
+from app.ingestion.files.reader import FileRow, ImportFileError, decode, file_format, read_file
 from app.ingestion.mapped import MappingFailure
 from app.processing.normalization import (
     normalize_domain,
@@ -39,8 +40,16 @@ class FileConnector:
         if entity_kind not in LAYOUTS:
             raise ImportFileError(f"cannot import {entity_kind} files")
         self.layout = LAYOUTS[entity_kind]
-        self.rows = read_file(data, file_format(name), self.layout)
+        self.name = PurePath(name).name
+        self.format = file_format(name)
+        self.text = decode(data)
+        self.rows = read_file(data, self.format, self.layout)
         self.rejected: list[RejectedRow] = []
+
+    def file_record(self) -> RawRecord:
+        """The whole file as read, archived with the run so rejected rows are kept too."""
+        payload = {"filename": self.name, "format": self.format, "text": self.text}
+        return RawRecord("import_file", self.name, None, payload)
 
     def fetch_since(self, watermark: datetime | None) -> Iterator[RawRecord]:
         """Yield every valid row; a file has no update times, so the watermark is ignored."""

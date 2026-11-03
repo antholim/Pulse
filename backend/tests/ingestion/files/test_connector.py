@@ -113,6 +113,23 @@ def test_rejected_rows_become_failures_named_by_their_id_or_their_row():
     ]
 
 
+def test_the_whole_file_is_kept_as_one_record_named_by_the_file():
+    # Arrange
+    data = "\ufeffid,name\n1,Société Acme\n2,\n".encode()
+    connector = FileConnector(data, "exports/organizations.csv", "organization")
+
+    # Act
+    record = connector.file_record()
+
+    # Assert
+    assert record == RawRecord(
+        "import_file",
+        "organizations.csv",
+        None,
+        {"filename": "organizations.csv", "format": "csv", "text": "id,name\n1,Société Acme\n2,\n"},
+    )
+
+
 def test_reading_twice_reports_each_rejected_row_once():
     # Arrange
     connector = org_file(",Acme,,,,,")
