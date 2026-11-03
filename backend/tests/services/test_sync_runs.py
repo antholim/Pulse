@@ -8,12 +8,14 @@ import httpx
 import pytest
 
 from app.ingestion.connector import RawRecord
+from app.ingestion.files.connector import FileConnector
 from app.ingestion.mapped import MappedRecord, MappingResult
 from app.models import Source
 from app.services import sync_runs
 from app.services.source_records import UpsertResult
 from app.services.sync_runs import (
     Fetched,
+    FileReader,
     OmerloReader,
     advance_watermarks,
     fetch,
@@ -307,6 +309,23 @@ def test_a_full_run_only_removes_records_of_the_kinds_it_read(session, stored):
 
     # Assert
     assert close.call_args.kwargs["kinds"] == ("person",)
+
+
+def test_a_file_import_counts_rejected_rows_and_never_removes_them(session, stored):
+    # Arrange
+    _, upsert, close = stored
+    data = b"id,name,email\n1,Acme,info@acme.ca\n2,Beta,not-an-email\n"
+    reader = FileReader(FileConnector(data, "organizations.csv", "organization"))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, full=True, now=clock())
+
+    # Assert
+    assert run.status == "succeeded"
+    assert run.counts["fetched"] == 1
+    assert run.counts["failed"] == 1
+    assert [r.external_id for r in upsert.call_args.args[2]] == ["organization:1"]
+    assert close.call_args.kwargs == {"keep": {"organization:2"}, "kinds": ("organization",)}
 
 
 def test_required_cleaning_failure_does_not_abort_sync_or_remove_stored_record(session, stored):

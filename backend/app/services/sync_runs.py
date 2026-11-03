@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.core.logging import logged_run
 from app.core.tenancy import bound_to_tenant
 from app.ingestion.connector import RawRecord, parse_timestamp
+from app.ingestion.files.connector import FileConnector
+from app.ingestion.files.mapping import map_rows
 from app.ingestion.mapped import MappingResult
 from app.ingestion.omerlo.connector import OmerloConnector
 from app.ingestion.omerlo.mapping.batch import map_records
@@ -58,6 +60,19 @@ class OmerloReader:
 
     def map(self, records: list[RawRecord]) -> MappingResult:
         return map_records(records)
+
+
+@dataclass(frozen=True)
+class FileReader:
+    connector: FileConnector
+
+    def fetch(self, source: Source, *, full: bool) -> Fetched:
+        records = list(self.connector.fetch_since(None))
+        return Fetched(records=records, kinds=(self.connector.layout.kind,))
+
+    def map(self, records: list[RawRecord]) -> MappingResult:
+        # Rejected rows count as failed, so a full import does not take them for removed.
+        return map_rows(records, rejected=self.connector.failures())
 
 
 def utc_now() -> datetime:
