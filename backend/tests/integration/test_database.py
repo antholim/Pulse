@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.core.database import check_database, get_db
+from app.core.tenancy import system_access
 from app.main import app
 
 pytestmark = pytest.mark.integration
@@ -15,7 +16,9 @@ def test_check_database_reaches_postgres(test_database):
 def test_session_runs_queries(test_database):
     session = next(get_db())
     try:
-        assert session.execute(text("SELECT version()")).scalar_one().startswith("PostgreSQL")
+        with system_access(session):
+            version = session.execute(text("SELECT version()")).scalar_one()
+        assert version.startswith("PostgreSQL")
     finally:
         session.close()
 

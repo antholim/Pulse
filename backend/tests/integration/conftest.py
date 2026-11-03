@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy.orm import Session
+
+from app.core.tenancy import SYSTEM_KEY, TenantSession
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 
@@ -29,10 +30,16 @@ def migrated_database(test_database, alembic_config):
 
 @pytest.fixture
 def session(migrated_database):
-    """A session whose work is rolled back after the test."""
+    """An app session whose work is rolled back after the test.
+
+    It starts with system access so tests can set up several tenants; code under test
+    binds it to a tenant with bound_to_tenant(), as the API and the sync do.
+    """
     connection = migrated_database.connect()
     transaction = connection.begin()
-    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+    session = TenantSession(
+        bind=connection, join_transaction_mode="create_savepoint", info={SYSTEM_KEY: True}
+    )
     yield session
     session.close()
     transaction.rollback()
