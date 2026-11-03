@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,7 @@ def tenant_database(tenant_id: uuid.UUID, db: Db) -> Iterator[Session]:
 
 TenantDb = Annotated[Session, Depends(tenant_database)]
 Kind = Annotated[str | None, Query(pattern="^(" + "|".join(ENTITY_KINDS) + ")$")]
+ExternalId = Annotated[str, Path(min_length=1, max_length=200)]
 
 
 @router.get("", response_model=list[TenantOut])
@@ -105,7 +106,9 @@ def search_records(
 
 
 @router.get("/{tenant_id}/records/{source_id}/{external_id}", response_model=RecordHistoryOut)
-def record_history(tenant_id: uuid.UUID, source_id: uuid.UUID, external_id: str, db: TenantDb):
+def record_history(
+    tenant_id: uuid.UUID, source_id: uuid.UUID, external_id: ExternalId, db: TenantDb
+):
     browse.get_tenant(db, tenant_id)
     versions, changes = browse.record_history(db, tenant_id, source_id, external_id)
     started = browse.run_order(db, {c.sync_run_id for cs in changes.values() for c in cs})

@@ -1,8 +1,17 @@
+import asyncio
+
 import pytest
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
 
-from app.core.security import SECURITY_HEADERS, SecurityHeadersMiddleware, cors_origins
+from app.core.errors import register_exception_handlers
+from app.core.security import (
+    SECURITY_HEADERS,
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+    cors_origins,
+    max_request_bytes,
+)
 from app.main import app
 
 client = TestClient(app)
@@ -93,3 +102,129 @@ def test_cors_origins_reject_a_wildcard(monkeypatch):
 
     with pytest.raises(ValueError, match="explicit origins"):
         cors_origins()
+
+
+def size_limited_client(max_bytes: int) -> TestClient:
+    small_app = FastAPI()
+    register_exception_handlers(small_app)
+    small_app.add_middleware(RequestSizeLimitMiddleware, max_bytes=max_bytes)
+
+    @small_app.post("/echo")
+    async def echo(request: Request):
+        return {"size": len(await request.body())}
+
+    return TestClient(small_app)
+
+
+def test_body_within_the_limit_is_accepted():
+    # Arrange
+    limited = size_limited_client(max_bytes=10)
+
+    # Act
+    response = limited.post("/echo", content=b"x" * 10)
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == {"size": 10}
+
+
+def test_declared_body_over_the_limit_is_rejected():
+    # Arrange
+    limited = size_limited_client(max_bytes=10)
+
+    # Act
+    response = limited.post("/echo", content=b"x" * 11)
+
+    # Assert
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "payload_too_large"
+
+
+def test_streamed_body_over_the_limit_is_rejected():
+    # Arrange
+    limited = size_limited_client(max_bytes=10)
+    chunks = iter([b"x" * 6, b"x" * 6])
+
+    # Act
+    response = limited.post("/echo", content=chunks)
+
+    # Assert
+    assert "content-length" not in response.request.headers
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "payload_too_large"
+
+
+def test_oversized_request_still_gets_the_security_headers():
+    # Arrange
+    too_large = str(max_request_bytes() + 1)
+
+    # Act
+    response = client.post("/api/health", headers={"Content-Length": too_large}, content=b"")
+
+    # Assert
+    assert response.status_code == 413
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+
+def test_max_request_bytes_defaults_to_ten_megabytes(monkeypatch):
+    # Arrange
+    monkeypatch.delenv("MAX_REQUEST_BYTES", raising=False)
+
+    # Act / Assert
+    assert max_request_bytes() == 10 * 1024 * 1024
+
+
+def test_max_request_bytes_from_environment(monkeypatch):
+    # Arrange
+    monkeypatch.setenv("MAX_REQUEST_BYTES", "2048")
+
+    # Act / Assert
+    assert max_request_bytes() == 2048
+
+
+def test_max_request_bytes_rejects_zero(monkeypatch):
+    # Arrange
+    monkeypatch.setenv("MAX_REQUEST_BYTES", "0")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="positive"):
+        max_request_bytes()
+
+
+def test_disconnect_messages_pass_through_the_size_limit():
+    # Arrange
+    received = []
+
+    async def app(scope, receive, send):
+        received.append(await receive())
+
+    async def receive():
+        return {"type": "http.disconnect"}
+
+    middleware = RequestSizeLimitMiddleware(app, max_bytes=10)
+    scope = {"type": "http", "method": "POST", "path": "/", "headers": []}
+
+    # Act
+    asyncio.run(middleware(scope, receive, None))
+
+    # Assert
+    assert received == [{"type": "http.disconnect"}]
+
+
+@pytest.mark.parametrize("header", [b"\xb2", b"abc", b"-1"])
+def test_a_malformed_content_length_is_left_to_the_server(header):
+    # Arrange
+    reached = []
+
+    async def app(scope, receive, send):
+        reached.append(scope["path"])
+
+    middleware = RequestSizeLimitMiddleware(app, max_bytes=10)
+    headers = [(b"content-length", header)]
+    scope = {"type": "http", "method": "POST", "path": "/", "headers": headers}
+
+    # Act
+    asyncio.run(middleware(scope, None, None))
+
+    # Assert
+    assert reached == ["/"]

@@ -20,6 +20,7 @@ HTTP_ERROR_CODES = {
     404: "not_found",
     405: "method_not_allowed",
     409: "conflict",
+    413: "payload_too_large",
     429: "too_many_requests",
     503: "service_unavailable",
 }
