@@ -2,7 +2,12 @@ import pytest
 
 from app.ingestion.omerlo.mapping.mappers import MappingError, map_record
 from tests.ingestion.omerlo.mapping import payloads
-from tests.ingestion.omerlo.mapping.payloads import WORKSPACE_ID, contact, profiles_block
+from tests.ingestion.omerlo.mapping.payloads import (
+    WORKSPACE_ID,
+    address,
+    contact,
+    profiles_block,
+)
 
 CRM_METADATA = [{"key": "crm_id", "value": "CRM-0042"}, {"key": "crm_id", "value": "CRM-0042"}]
 
@@ -30,7 +35,59 @@ def test_organization_identifiers_come_from_every_locale_deduplicated():
         "domains": ["boulangeriestroch.ca"],
         "linkedin": ["company/boulangerie-st-roch"],
     }
-    assert record.attributes["cities"] == ["quebec", "quebec city"]
+    assert record.city == "quebec"
+    assert record.attributes["cities"] == ["quebec"]
+
+
+def test_organization_in_two_different_cities_has_no_city():
+    # Arrange
+    payload = payloads.organization()
+    payload["address"] = [address("fr", "Saint-Georges"), address("en", "Lévis")]
+
+    # Act
+    record = map_record("organization", payload)
+
+    # Assert
+    assert record.city is None
+    assert record.attributes["cities"] == ["saint georges", "levis"]
+
+
+def test_organization_city_spellings_across_locales_share_one_city():
+    # Arrange
+    payload = payloads.organization()
+    payload["address"] = [address("fr", "St-Georges"), address("en", "Saint Georges")]
+
+    # Act
+    record = map_record("organization", payload)
+
+    # Assert
+    assert record.city == "saint georges"
+
+
+def test_organization_city_skips_deleted_and_blank_addresses():
+    # Arrange
+    payload = payloads.organization()
+    deleted = {**address("en", "Lévis"), "deleted_at": "2026-01-01T00:00:00Z"}
+    payload["address"] = [address("fr", "Québec"), deleted, address("es", "  ")]
+
+    # Act
+    record = map_record("organization", payload)
+
+    # Assert
+    assert record.city == "quebec"
+
+
+def test_organization_without_an_address_has_no_city():
+    # Arrange
+    payload = payloads.organization()
+    payload["address"] = []
+
+    # Act
+    record = map_record("organization", payload)
+
+    # Assert
+    assert record.city is None
+    assert record.attributes["cities"] == []
 
 
 def test_organization_domain_never_comes_from_the_canonical_url():
@@ -221,6 +278,7 @@ def test_only_organizations_fill_the_matching_columns():
     # Assert
     assert record.domain is None
     assert record.linkedin is None
+    assert record.city is None
     assert record.attributes["identifiers"]["domains"] == ["corridorvert.ca"]
     assert record.attributes["owner_id"] == "org-1"
 

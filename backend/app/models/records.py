@@ -114,6 +114,7 @@ class SourceRecord(Base):
             "linkedin",
             postgresql_where=CURRENT_VERSION,
         ),
+        Index("ix_source_record_city", "tenant_id", "city", postgresql_where=CURRENT_VERSION),
         # Records seen by a run: removal detection compares last_seen_run (#58, #60).
         # Both also index their sync run foreign keys.
         Index("ix_source_record_first_seen_run", "tenant_id", "first_seen_run"),
@@ -132,6 +133,8 @@ class SourceRecord(Base):
     name_normalized: Mapped[str | None] = mapped_column(Text)
     domain: Mapped[str | None] = mapped_column(Text)
     linkedin: Mapped[str | None] = mapped_column(Text)
+    # Normalized city, empty when the addresses name different cities.
+    city: Mapped[str | None] = mapped_column(Text)
     external_ids: Mapped[dict] = json_column()
     attributes: Mapped[dict] = json_column()
     workspace_id: Mapped[str | None] = mapped_column(Text)

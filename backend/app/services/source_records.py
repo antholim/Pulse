@@ -244,6 +244,7 @@ def version_row(run: SyncRun, record: MappedRecord, version_id: uuid.UUID, diges
         "name_normalized": record.name_normalized,
         "domain": record.domain,
         "linkedin": record.linkedin,
+        "city": record.city,
         "external_ids": record.external_ids,
         "attributes": record.attributes,
         "workspace_id": record.workspace_id,

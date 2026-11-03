@@ -1,0 +1,12 @@
+# AI declaration: 50% or more AI-generated
+# City names that normalize_city cannot match on spelling alone.
+# Accents, case, hyphens and St/Ste are already handled in code, so a city with no other
+# name needs no entry here.
+
+# Leading words dropped from any city: "Ville de Lévis" and "City of Levis" read as "levis".
+prefixes = ["Ville de", "Ville d'", "City of", "Town of"]
+
+# Each key is the city; its list holds the other names it goes by, in any spelling.
+[aliases]
+quebec = ["Quebec City"]
+"trois rivieres" = ["Three Rivers"]
