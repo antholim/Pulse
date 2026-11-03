@@ -14,7 +14,8 @@ def content_hash(record: MappedRecord) -> str:
     """SHA-256 of the normalized columns and the payload kept in `attributes`.
 
     Keys are sorted and volatile keys dropped at any depth, so two fetches of the same
-    content hash the same.
+    content hash the same. `city` is left out: it is read from `attributes["cities"]`,
+    and adding it would change the hash of every stored record.
     """
     content = {
         "kind": record.kind,
