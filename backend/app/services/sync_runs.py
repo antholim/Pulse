@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Run one sync of a source: fetch, archive, map and store versions, recorded as a sync_run."""
 
 from collections.abc import Callable, Iterable
@@ -7,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.core.logging import logged_run
+from app.core.tenancy import bound_to_tenant
 from app.ingestion.connector import RawRecord, parse_timestamp
 from app.ingestion.omerlo.connector import OmerloConnector
 from app.ingestion.omerlo.mapping.batch import map_records
@@ -54,39 +56,42 @@ def run_sync(
     A failed run is recorded with its error; the versions and watermarks it would have
     written are rolled back, so the previous data stays as it was.
     """
-    run = SyncRun(
-        tenant_id=source.tenant_id,
-        source_id=source.id,
-        started_at=now(),
-        status="running",
-        mode="full" if full else "incremental",
-        counts={},
-    )
-    session.add(run)
-    session.commit()
-
-    counts = dict.fromkeys(COUNT_KEYS, 0)
-    try:
-        with logged_run("sync", str(source.id), str(run.id)) as logged:
-            try:
-                fetched = fetch(connector, source, full=full)
-                counts["fetched"] = len(fetched.records)
-                archive_records(session, archive, run, fetched.records)
-                # Kept even if storing fails, so the run can be reprocessed from the archive.
-                session.commit()
-                counts.update(store(session, run, source, fetched, detect_changes))
-                finish(run, "succeeded", counts, now())
-                session.commit()
-            finally:
-                logged.update(counts)
-    except Exception as error:
-        session.rollback()
-        run.counts = {}
-        # Counts of the rolled back writes would describe data that is not there.
-        failed_counts = {**dict.fromkeys(COUNT_KEYS, 0), "fetched": counts["fetched"]}
-        finish(run, "failed", failed_counts, now(), error=describe(error))
+    with bound_to_tenant(session, source.tenant_id):
+        run = SyncRun(
+            tenant_id=source.tenant_id,
+            source_id=source.id,
+            started_at=now(),
+            status="running",
+            mode="full" if full else "incremental",
+            counts={},
+        )
+        session.add(run)
         session.commit()
-    return run
+
+        counts = dict.fromkeys(COUNT_KEYS, 0)
+        try:
+            with logged_run("sync", str(source.id), str(run.id)) as logged:
+                try:
+                    fetched = fetch(connector, source, full=full)
+                    counts["fetched"] = len(fetched.records)
+                    archive_records(session, archive, run, fetched.records)
+                    # Kept even if storing fails, so the run can be reprocessed from the archive.
+                    session.commit()
+                    counts.update(store(session, run, source, fetched, detect_changes))
+                    finish(run, "succeeded", counts, now())
+                    session.commit()
+                finally:
+                    logged.update(counts)
+        except Exception as error:
+            session.rollback()
+            run.counts = {}
+            # Counts of the rolled back writes would describe data that is not there.
+            failed_counts = {**dict.fromkeys(COUNT_KEYS, 0), "fetched": counts["fetched"]}
+            finish(run, "failed", failed_counts, now(), error=describe(error))
+            session.commit()
+        # Loaded while still bound, so callers can read the run after the scope ends.
+        session.refresh(run)
+        return run
 
 
 def fetch(connector: OmerloConnector, source: Source, *, full: bool) -> Fetched:

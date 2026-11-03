@@ -1,6 +1,5 @@
+# AI contribution: Below 50% AI-generated
 """
-
-AI declaration: Below 50% AI (used only for initial example)
 
 Cleaning rules for scalar columns emitted by the Omerlo mappers.
 
@@ -19,6 +18,7 @@ CONFIGS = {
             "name_normalized": FieldRule(required=kind in ("organization", "person")),
             "domain": FieldRule(),
             "linkedin": FieldRule(),
+            "city": FieldRule(),
         },
         # Compare the complete cleaned record, including external_id. An id alone
         # would hide changed payloads. Never supply historical records here.

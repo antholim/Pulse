@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Retry idempotent HTTP requests on network errors and server errors, with exponential backoff."""
 
 import logging

@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Sync run orchestration with the database mocked; tests/integration runs it for real."""
 
 import uuid
@@ -147,7 +148,8 @@ def test_watermarks_advance_to_the_newest_update_and_never_go_back():
 
 @pytest.fixture
 def session(mocker):
-    return mocker.MagicMock()
+    # A real info dict, where the session keeps its tenant scope.
+    return mocker.MagicMock(info={})
 
 
 @pytest.fixture

@@ -1,0 +1,27 @@
+name: PR description
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ai-assistance:
+    name: AI assistance section
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # Passed through env, never interpolated into the script, since anyone can write the body.
+      - run: python scripts/pr_ai_assistance.py
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}

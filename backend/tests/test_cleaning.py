@@ -1,6 +1,5 @@
+# AI contribution: Below 50% AI-generated
 """
-AI declaration: Below 50% AI
-
 Unit tests for PULSE cleaning. Each test uses Arrange, Act, Assert."""
 
 from datetime import UTC, datetime

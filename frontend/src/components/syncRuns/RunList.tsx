@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import type { SyncRun } from "../../services/api";
 import { CHANGE_TYPES, changeCounts, fetchedCount, formatTime } from "./format";
 

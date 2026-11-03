@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """HTTP access to the Omerlo backoffice API (ADR D8, wiki page "Omerlo API").
 
 Every request carries the API key in the `x-api-key` header. The documented

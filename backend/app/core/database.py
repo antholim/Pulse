@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.tenancy import TenantSession
+
 # Load the .env file from the PULSE root directory
 ROOT_DIR = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT_DIR / ".env")
@@ -27,7 +29,8 @@ def get_engine() -> Engine:
 
 @cache
 def get_session_factory() -> sessionmaker[Session]:
-    return sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+    # Sessions start with no tenant; see app.core.tenancy.
+    return sessionmaker(bind=get_engine(), class_=TenantSession, autoflush=False, autocommit=False)
 
 
 def get_db():

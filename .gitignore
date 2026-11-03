@@ -35,3 +35,6 @@ backend/synthetic/out/
 
 # Local raw payload archive (ARCHIVE_DIR)
 raw-archive/
+
+# Local link to the shared agent skill (see .agents/README.md)
+.claude/skills/ai-checklist

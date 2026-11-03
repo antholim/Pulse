@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Run one sync of a tenant's source and print the recorded sync run.
 
 uv run python -m app.sync --tenant demo-capitale            # incremental
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_session_factory
 from app.core.logging import configure_logging
+from app.core.tenancy import bound_to_tenant, system_access
 from app.ingestion.omerlo.client import create_omerlo_client
 from app.ingestion.omerlo.connector import OmerloConnector
 from app.ingestion.omerlo.settings import OmerloSettings
@@ -82,12 +84,15 @@ def summary(run: SyncRun) -> str:
 
 
 def sync(session: Session, tenant_key: str, source_id: str | None, *, full: bool) -> SyncRun:
-    tenant = find_tenant(session, tenant_key)
-    source = find_source(session, tenant, source_id)
-    settings = omerlo_settings(source, tenant)
-    with create_omerlo_client(settings) as client:
-        connector = OmerloConnector(client, workspace_ids=source.config.get("workspace_ids"))
-        return run_sync(session, source, connector, create_archive(), full=full)
+    # Finding the tenant by its slug looks across tenants; everything after is scoped to it.
+    with system_access(session):
+        tenant = find_tenant(session, tenant_key)
+    with bound_to_tenant(session, tenant.id):
+        source = find_source(session, tenant, source_id)
+        settings = omerlo_settings(source, tenant)
+        with create_omerlo_client(settings) as client:
+            connector = OmerloConnector(client, workspace_ids=source.config.get("workspace_ids"))
+            return run_sync(session, source, connector, create_archive(), full=full)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

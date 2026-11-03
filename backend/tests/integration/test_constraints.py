@@ -1,4 +1,4 @@
-# AI declaration: Below 50% AI-generated
+# AI contribution: Below 50% AI-generated
 """The database itself enforces the tenancy and versioning rules of data model v1."""
 
 from dataclasses import dataclass

@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Read-only endpoints for the sync runs page: runs, their changes and record history."""
 
 import uuid
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import DatabaseNotConfiguredError, get_db
 from app.core.errors import DatabaseUnavailableError
+from app.core.tenancy import bound_to_tenant, system_access
 from app.models.records import ENTITY_KINDS
 from app.schemas.browse import (
     ChangeOut,
@@ -34,19 +36,30 @@ def database() -> Iterator[Session]:
 
 
 Db = Annotated[Session, Depends(database)]
+
+
+def tenant_database(tenant_id: uuid.UUID, db: Db) -> Iterator[Session]:
+    """The session bound to the tenant in the path, so no query can reach another tenant."""
+    with bound_to_tenant(db, tenant_id):
+        yield db
+
+
+TenantDb = Annotated[Session, Depends(tenant_database)]
 Kind = Annotated[str | None, Query(pattern="^(" + "|".join(ENTITY_KINDS) + ")$")]
 ExternalId = Annotated[str, Path(min_length=1, max_length=200)]
 
 
 @router.get("", response_model=list[TenantOut])
 def list_tenants(db: Db):
-    return [
-        TenantOut(id=t.id, name=t.name, slug=t.omerlo_media_id) for t in browse.list_tenants(db)
-    ]
+    # Lists every tenant, so it needs system access; to restrict once users exist.
+    with system_access(db):
+        return [
+            TenantOut(id=t.id, name=t.name, slug=t.omerlo_media_id) for t in browse.list_tenants(db)
+        ]
 
 
 @router.get("/{tenant_id}/runs", response_model=list[SyncRunOut])
-def list_runs(tenant_id: uuid.UUID, db: Db):
+def list_runs(tenant_id: uuid.UUID, db: TenantDb):
     browse.get_tenant(db, tenant_id)
     return [
         SyncRunOut.model_validate(run, from_attributes=True)
@@ -55,7 +68,7 @@ def list_runs(tenant_id: uuid.UUID, db: Db):
 
 
 @router.get("/{tenant_id}/runs/{run_id}/changes", response_model=list[ChangeOut])
-def run_changes(tenant_id: uuid.UUID, run_id: uuid.UUID, db: Db):
+def run_changes(tenant_id: uuid.UUID, run_id: uuid.UUID, db: TenantDb):
     browse.get_tenant(db, tenant_id)
     return [
         ChangeOut(
@@ -73,7 +86,7 @@ def run_changes(tenant_id: uuid.UUID, run_id: uuid.UUID, db: Db):
 @router.get("/{tenant_id}/records", response_model=list[RecordOut])
 def search_records(
     tenant_id: uuid.UUID,
-    db: Db,
+    db: TenantDb,
     kind: Kind = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
 ):
@@ -93,7 +106,9 @@ def search_records(
 
 
 @router.get("/{tenant_id}/records/{source_id}/{external_id}", response_model=RecordHistoryOut)
-def record_history(tenant_id: uuid.UUID, source_id: uuid.UUID, external_id: ExternalId, db: Db):
+def record_history(
+    tenant_id: uuid.UUID, source_id: uuid.UUID, external_id: ExternalId, db: TenantDb
+):
     browse.get_tenant(db, tenant_id)
     versions, changes = browse.record_history(db, tenant_id, source_id, external_id)
     started = browse.run_order(db, {c.sync_run_id for cs in changes.values() for c in cs})

@@ -1,4 +1,4 @@
-# AI declaration: Below 50% AI-generated
+# AI contribution: 50% or more AI-generated
 """Store mapped records as source_record versions, keeping every earlier version."""
 
 import uuid
@@ -22,9 +22,9 @@ _ID_ARRAYS = (bindparam("old_ids", type_=ARRAY(UUID)), bindparam("new_ids", type
 COPY_ORG_LINKS = text(
     f"""
     INSERT INTO org_link (source_record_id, organization_id, tenant_id, method, confidence,
-                          decided_by, decided_at, evidence)
+                          decided_by, decided_at)
     SELECT m.new_id, l.organization_id, l.tenant_id, l.method, l.confidence, l.decided_by,
-           l.decided_at, l.evidence
+           l.decided_at
     FROM org_link l
     JOIN {_ID_PAIRS} ON l.source_record_id = m.old_id
     WHERE l.tenant_id = :tenant_id
@@ -244,6 +244,7 @@ def version_row(run: SyncRun, record: MappedRecord, version_id: uuid.UUID, diges
         "name_normalized": record.name_normalized,
         "domain": record.domain,
         "linkedin": record.linkedin,
+        "city": record.city,
         "external_ids": record.external_ids,
         "attributes": record.attributes,
         "workspace_id": record.workspace_id,

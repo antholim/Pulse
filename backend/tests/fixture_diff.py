@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Read synthetic fixtures and their expected diff in the terms of normalized source records.
 
 The mutation script describes changes in fixture terms (`organizations`, `contact[fr].email`,

@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 import os
 import tempfile
 import uuid

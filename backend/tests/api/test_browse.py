@@ -1,9 +1,11 @@
+# AI contribution: 50% or more AI-generated
 import uuid
 
 from fastapi.testclient import TestClient
 
 from app.api.browse import database as browse_database
 from app.core import database
+from app.core.tenancy import TenantSession
 from app.main import app
 from app.models import SourceRecord
 from app.services.browse import label
@@ -69,7 +71,7 @@ def test_endpoints_answer_503_without_a_database(monkeypatch):
 
 def test_unknown_kind_is_rejected():
     # Arrange
-    app.dependency_overrides[browse_database] = lambda: None
+    app.dependency_overrides[browse_database] = TenantSession
     client = TestClient(app)
 
     # Act
@@ -84,7 +86,7 @@ def test_unknown_kind_is_rejected():
 
 def test_overlong_external_id_is_rejected():
     # Arrange
-    app.dependency_overrides[browse_database] = lambda: None
+    app.dependency_overrides[browse_database] = TenantSession
     client = TestClient(app)
     path = f"/api/tenants/{uuid.uuid4()}/records/{uuid.uuid4()}/{'x' * 201}"
 

@@ -42,6 +42,10 @@ CONNECTOR_TOKEN = "and"
 CONNECTOR_ALIASES = frozenset({"&", "et", "and"})
 
 _LEGAL_SUFFIXES_PATH = Path(__file__).with_name("legal_suffixes.toml")
+_CITY_ALIASES_PATH = Path(__file__).with_name("city_aliases.toml")
+
+# Abbreviated words in place names, spelled out so St-Georges and Saint-Georges share a key.
+CITY_ABBREVIATIONS = {"st": "saint", "ste": "sainte"}
 
 # Punctuation and symbols become spaces before whitespace is collapsed.
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -189,6 +193,90 @@ def normalize_text(value: str | None) -> str | None:
 def normalize_person_name(value: str | None) -> str | None:
     """Return a comparison key for a person full name, or None if unusable."""
     return normalize_text(value)
+
+
+@dataclass(frozen=True)
+class CityConfig:
+    """Leading words dropped from city names, and the key of every alias to its city."""
+
+    prefixes: tuple[str, ...]
+    aliases: dict[str, str]
+
+
+def _city_words(value: str | None) -> str | None:
+    """Text key with ``St`` and ``Ste`` spelled out, before prefixes and aliases."""
+    key = normalize_text(value)
+    if key is None:
+        return None
+    return " ".join(CITY_ABBREVIATIONS.get(token, token) for token in key.split(" "))
+
+
+def _without_prefix(key: str, prefixes: tuple[str, ...]) -> str:
+    """Drop one leading prefix (``ville de quebec`` → ``quebec``), never the whole name."""
+    for prefix in prefixes:
+        if key.startswith(f"{prefix} "):
+            return key[len(prefix) + 1 :]
+    return key
+
+
+def _city_config_error(detail: str) -> ValueError:
+    return ValueError(f"{detail} in {_CITY_ALIASES_PATH.name}")
+
+
+@lru_cache(maxsize=1)
+def _load_city_config() -> CityConfig:
+    """Load ``city_aliases.toml`` once, normalizing prefixes and aliases like a city."""
+    with _CITY_ALIASES_PATH.open("rb") as handle:
+        data = tomllib.load(handle)
+    raw_prefixes = data.get("prefixes", [])
+    raw_aliases = data.get("aliases")
+    if not isinstance(raw_prefixes, list):
+        raise _city_config_error("prefixes must be a list")
+    if not isinstance(raw_aliases, dict) or not raw_aliases:
+        raise _city_config_error("missing or empty aliases table")
+
+    prefix_keys = [_city_words(p) if isinstance(p, str) else None for p in raw_prefixes]
+    if None in prefix_keys:
+        raise _city_config_error(f"invalid prefix: {raw_prefixes!r}")
+    # Longest first, so a longer prefix is never cut short by one it starts with.
+    prefixes = tuple(sorted(set(prefix_keys), key=lambda prefix: (-len(prefix), prefix)))
+
+    def key(name: object) -> str | None:
+        words = _city_words(name) if isinstance(name, str) else None
+        return _without_prefix(words, prefixes) if words else None
+
+    aliases: dict[str, str] = {}
+    for city, names in raw_aliases.items():
+        city_key = key(city)
+        if city_key is None or not isinstance(names, list):
+            raise _city_config_error(f"invalid city: {city!r}")
+        for name in (city, *names):
+            alias = key(name)
+            # One name for two cities would merge organizations on a guess.
+            if alias is None or aliases.get(alias, city_key) != city_key:
+                raise _city_config_error(f"invalid alias: {name!r}")
+            aliases[alias] = city_key
+    return CityConfig(prefixes=prefixes, aliases=aliases)
+
+
+def city_config() -> CityConfig:
+    """Public read-only view of the loaded city prefixes and aliases."""
+    return _load_city_config()
+
+
+def normalize_city(value: str | None) -> str | None:
+    """Return a comparison key for a city, or None if unusable.
+
+    Accents, case and hyphens are folded, ``St``/``Ste`` spelled out, a prefix such as
+    ``Ville de`` dropped, and known aliases mapped to one key: ``Ville de Québec`` and
+    ``Quebec City`` both become ``quebec``.
+    """
+    words = _city_words(value)
+    if words is None:
+        return None
+    config = _load_city_config()
+    key = _without_prefix(words, config.prefixes)
+    return config.aliases.get(key, key)
 
 
 @lru_cache(maxsize=1)

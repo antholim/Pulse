@@ -15,8 +15,10 @@ from app.processing.normalization import (
     PHONE_WARNING_IMPOSSIBLE,
     PHONE_WARNING_UNPARSEABLE,
     PhoneResult,
+    city_config,
     email_domain,
     legal_suffixes,
+    normalize_city,
     normalize_domain,
     normalize_email,
     normalize_linkedin,
@@ -174,6 +176,122 @@ def test_person_variants_share_a_key(left, right):
     [
         (None, None),
         ("", None),
+        ("   ", None),
+        ("--", None),
+        ("Québec", "quebec"),
+        ("QUEBEC", "quebec"),
+        ("Quebec City", "quebec"),
+        ("Ville de Québec", "quebec"),
+        ("City of Quebec", "quebec"),
+        ("Saint-Georges", "saint georges"),
+        ("St-Georges", "saint georges"),
+        ("St. Georges", "saint georges"),
+        ("Ste-Marie", "sainte marie"),
+        ("Baie-St-Paul", "baie saint paul"),
+        ("Trois-Rivières", "trois rivieres"),
+        ("Three Rivers", "trois rivieres"),
+        ("Stoneham", "stoneham"),
+        ("Lévis", "levis"),
+        ("Ville de Saint-Georges", "saint georges"),
+        ("Ville d'Alma", "alma"),
+        ("Town of Mount Royal", "mount royal"),
+        ("Ville de", "ville de"),
+        ("Villeroy", "villeroy"),
+    ],
+)
+def test_normalize_city(raw, expected):
+    # Act / Assert
+    assert normalize_city(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("Québec", "Ville de Québec"),
+        ("Quebec City", "Québec"),
+        ("Saint-Georges", "St-Georges"),
+        ("Sainte-Marie", "Ste Marie"),
+        ("Montréal", "City of Montreal"),
+        ("Rimouski", "Ville de Rimouski"),
+        ("City of Quebec", "Ville de Québec"),
+    ],
+)
+def test_city_variants_share_a_key(left, right):
+    assert normalize_city(left) == normalize_city(right)
+    assert normalize_city(left) is not None
+
+
+def test_different_cities_keep_different_keys():
+    assert normalize_city("Saint-Georges") != normalize_city("Lévis")
+
+
+def test_city_config_normalizes_prefixes_and_aliases():
+    # Act
+    config = city_config()
+
+    # Assert
+    assert config.prefixes == ("ville de", "city of", "town of", "ville d")
+    assert config.aliases["quebec city"] == "quebec"
+    assert config.aliases["quebec"] == "quebec"
+    assert config.aliases["three rivers"] == "trois rivieres"
+
+
+def test_city_config_loader_is_cached():
+    assert city_config() is city_config()
+
+
+@pytest.fixture
+def aliases_file(tmp_path, monkeypatch):
+    """A temporary aliases config, loaded instead of the real one for one test."""
+    config = tmp_path / "city_aliases.toml"
+    monkeypatch.setattr(norm, "_CITY_ALIASES_PATH", config)
+    norm._load_city_config.cache_clear()
+    yield config
+    norm._load_city_config.cache_clear()
+
+
+def test_city_config_without_prefixes_keeps_the_whole_name(aliases_file):
+    # Arrange
+    aliases_file.write_text('[aliases]\nquebec = ["Quebec City"]\n')
+
+    # Act / Assert
+    assert normalize_city("Ville de Lévis") == "ville de levis"
+
+
+def test_city_config_rejects_one_name_for_two_cities(aliases_file):
+    # Arrange
+    aliases_file.write_text('[aliases]\nquebec = ["La Capitale"]\nlevis = ["La Capitale"]\n')
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="invalid alias"):
+        city_config()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",
+        "[aliases]\n",
+        'aliases = "quebec"\n',
+        '[aliases]\nquebec = "Quebec City"\n',
+        'prefixes = "Ville de"\n[aliases]\nquebec = ["Quebec City"]\n',
+        'prefixes = ["Ville de", " "]\n[aliases]\nquebec = ["Quebec City"]\n',
+    ],
+)
+def test_city_config_rejects_a_malformed_config(aliases_file, content):
+    # Arrange
+    aliases_file.write_text(content)
+
+    # Act / Assert
+    with pytest.raises(ValueError):
+        city_config()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, None),
+        ("", None),
         ("not-a-domain", None),
         ("user@exemple.qc.ca", None),
         ("exemple.qc.ca", "exemple.qc.ca"),
@@ -295,6 +413,7 @@ def test_oversized_inputs_are_rejected():
 
     assert normalize_organization_name(oversized) is None
     assert normalize_person_name(oversized) is None
+    assert normalize_city(oversized) is None
     assert normalize_domain(oversized) is None
     assert normalize_linkedin(f"company/{oversized}") is None
     assert normalize_email(f"{oversized}@exemple.qc.ca") is None

@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Record what a sync run added, modified and removed, and diff any two runs on demand."""
 
 import uuid

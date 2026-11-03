@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Read-only queries behind the sync runs page. Every query is scoped to one tenant."""
 
 import uuid

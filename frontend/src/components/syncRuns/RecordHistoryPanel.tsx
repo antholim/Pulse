@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import type { RecordHistory, SyncRun } from "../../services/api";
 import { FieldChanges } from "./FieldChanges";
 import { formatTime, formatValue } from "./format";
