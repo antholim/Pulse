@@ -51,6 +51,10 @@ Some pairs still share a domain, LinkedIn URL or CRM id (Tier 1 can find them); 
 
 `ground_truth.dev_only.json` maps every organization and person record to an entity key, and lists each duplicate pair with its changes. Organization keys are the same across tenants, so the cross-tenant overlap is known too.
 
+## Import samples
+
+`samples/organizations.csv` and `samples/people.json` are small hand-written files in the format of `app.import_file` (see the README section "Importing CSV and JSON files"). Names and domains are invented. Each holds one invalid row on purpose (a malformed email, a person without a name), so an import shows a rejected row.
+
 ## Schemas
 
 `omerlo_schema.py` defines each resource as a strict Pydantic model, for the detail and the list shapes; unknown fields fail validation. `--schemas DIR` exports them as JSON Schema.
