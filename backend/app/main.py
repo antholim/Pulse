@@ -10,7 +10,12 @@ from app.core.database import DatabaseNotConfiguredError, check_database
 from app.core.errors import UnhandledErrorMiddleware, register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.request_context import RequestContextMiddleware
-from app.core.security import SecurityHeadersMiddleware, cors_origins
+from app.core.security import (
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+    cors_origins,
+    max_request_bytes,
+)
 
 configure_logging()
 logger = get_logger(__name__)
@@ -33,6 +38,7 @@ register_exception_handlers(app)
 
 # Added first so it is the innermost middleware and its 500s still get CORS and security headers.
 app.add_middleware(UnhandledErrorMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=max_request_bytes())
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),

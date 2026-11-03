@@ -1,7 +1,10 @@
 import os
 
-from starlette.datastructures import MutableHeaders
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.core.errors import error_response
 
 # Added to every response unless the route already set the header.
 # Strict-Transport-Security is ignored by browsers over plain HTTP, so it only takes
@@ -15,6 +18,7 @@ SECURITY_HEADERS = {
 }
 
 DEFAULT_CORS_ORIGINS = "http://localhost:5173"
+DEFAULT_MAX_REQUEST_BYTES = 10 * 1024 * 1024
 
 
 class SecurityHeadersMiddleware:
@@ -34,6 +38,51 @@ class SecurityHeadersMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
+
+
+class RequestSizeLimitMiddleware:
+    """Answers 413 to request bodies over max_bytes, whether or not they send Content-Length."""
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        declared = Headers(scope=scope).get("content-length", "")
+        if declared.isdigit() and int(declared) > self.max_bytes:
+            response = error_response(413, "payload_too_large", self._message())
+            await response(scope, receive, send)
+            return
+
+        received = 0
+
+        async def counting_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    # Raised inside the app, so the usual HTTP error handler formats it.
+                    raise HTTPException(413, self._message())
+            return message
+
+        await self.app(scope, counting_receive, send)
+
+    def _message(self) -> str:
+        return f"The request body is over {self.max_bytes} bytes."
+
+
+def max_request_bytes() -> int:
+    """Largest request body the API accepts, from MAX_REQUEST_BYTES."""
+    raw = os.environ.get("MAX_REQUEST_BYTES")
+    value = int(raw) if raw else DEFAULT_MAX_REQUEST_BYTES
+    if value <= 0:
+        raise ValueError("MAX_REQUEST_BYTES must be a positive number of bytes")
+    return value
 
 
 def cors_origins() -> list[str]:
