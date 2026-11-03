@@ -49,27 +49,70 @@ def is_raw_sql_call(node: ast.Call, text_names: set[str]) -> bool:
     return isinstance(func, ast.Attribute) and func.attr in {"text", "exec_driver_sql"}
 
 
+def sql_argument(node: ast.Call) -> ast.expr | None:
+    """The SQL passed to text() or exec_driver_sql(), by position or by keyword."""
+    if node.args:
+        return node.args[0]
+    return next((k.value for k in node.keywords if k.arg in {"text", "statement"}), None)
+
+
+def assignments(scope: ast.AST) -> dict[str, list[ast.expr]]:
+    """Values assigned to each plain name directly in a module or function body."""
+    found: dict[str, list[ast.expr]] = {}
+    for node in ast.walk(scope):
+        if node is not scope and isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign | ast.AugAssign) and isinstance(node.target, ast.Name):
+            targets = [node.target.id]
+        else:
+            continue
+        value = node.value
+        if isinstance(node, ast.AugAssign):
+            # sql += "..." builds a string whatever the right-hand side is.
+            value = ast.BinOp(left=node.target, op=node.op, right=node.value)
+        for name in targets:
+            if value is not None:
+                found.setdefault(name, []).append(value)
+    return found
+
+
+def builds_sql(argument: ast.expr, scopes: list[dict[str, list[ast.expr]]]) -> bool:
+    """A built string passed inline, or a name assigned one in the same function or module."""
+    if is_built_string(argument):
+        return True
+    if not isinstance(argument, ast.Name):
+        return False
+    for scope in reversed(scopes):
+        if argument.id in scope:
+            return any(is_built_string(value) for value in scope[argument.id])
+    return False
+
+
 def built_sql(path: Path) -> list[tuple[str, str, int]]:
-    """(file, enclosing function, line) of every raw SQL call that gets a built string."""
+    """(file, enclosing function, line) of every raw SQL call that gets a built string.
+
+    A name is followed to its assignments in the same function or at module level. SQL
+    built in another function and passed in as an argument is not caught.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
     text_names = sqlalchemy_text_names(tree)
     relative = path.relative_to(APP).as_posix()
     found = []
 
-    def visit(node: ast.AST, function: str) -> None:
+    def visit(node: ast.AST, function: str, scopes: list[dict[str, list[ast.expr]]]) -> None:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             function = node.name
-        if (
-            isinstance(node, ast.Call)
-            and node.args
-            and is_raw_sql_call(node, text_names)
-            and is_built_string(node.args[0])
-        ):
-            found.append((relative, function, node.lineno))
+            scopes = [*scopes, assignments(node)]
+        if isinstance(node, ast.Call) and is_raw_sql_call(node, text_names):
+            argument = sql_argument(node)
+            if argument is not None and builds_sql(argument, scopes):
+                found.append((relative, function, node.lineno))
         for child in ast.iter_child_nodes(node):
-            visit(child, function)
+            visit(child, function, scopes)
 
-    visit(tree, "<module>")
+    visit(tree, "<module>", [assignments(tree)])
     return found
 
 
@@ -98,6 +141,7 @@ def test_raw_sql_is_never_built_from_strings():
         'from sqlalchemy import text as sql\nsql("SELECT {}".format(name))',
         'import sqlalchemy\nsqlalchemy.text(f"SELECT {name}")',
         'conn.exec_driver_sql(f"SELECT {name}")',
+        'from sqlalchemy import text\ntext(text=f"SELECT {name}")',
     ],
 )
 def test_built_sql_is_detected(tmp_path, monkeypatch, source):
@@ -123,6 +167,43 @@ def test_literal_sql_and_other_text_functions_pass(tmp_path, monkeypatch, source
     monkeypatch.setattr("tests.test_raw_sql.APP", tmp_path)
     path = tmp_path / "module.py"
     path.write_text(source, encoding="utf-8")
+
+    # Act / Assert
+    assert built_sql(path) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "line"),
+    [
+        ('from sqlalchemy import text\nsql = f"SELECT {name}"\ntext(sql)', 3),
+        ('from sqlalchemy import text\nsql = "SELECT 1"\nsql += clause\ntext(sql)', 4),
+        (
+            "from sqlalchemy import text\ndef run(name):\n"
+            '    sql: str = "SELECT " + name\n    return text(sql)',
+            4,
+        ),
+    ],
+)
+def test_sql_built_on_an_earlier_line_is_detected(tmp_path, monkeypatch, source, line):
+    # Arrange
+    monkeypatch.setattr("tests.test_raw_sql.APP", tmp_path)
+    path = tmp_path / "module.py"
+    path.write_text(source, encoding="utf-8")
+
+    # Act
+    found = built_sql(path)
+
+    # Assert
+    assert [lineno for _, _, lineno in found] == [line]
+
+
+def test_a_name_holding_literal_sql_passes(tmp_path, monkeypatch):
+    # Arrange
+    monkeypatch.setattr("tests.test_raw_sql.APP", tmp_path)
+    path = tmp_path / "module.py"
+    path.write_text(
+        'from sqlalchemy import text\nSQL = "SELECT 1 WHERE id = :id"\ntext(SQL)', encoding="utf-8"
+    )
 
     # Act / Assert
     assert built_sql(path) == []
