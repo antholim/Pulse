@@ -119,6 +119,40 @@ def test_a_missing_file_is_reported(seeded, tmp_path, capsys):
     assert "Cannot read" in capsys.readouterr().err
 
 
+def test_source_picks_one_of_several_csv_sources(seeded, tmp_path, capsys):
+    # Arrange
+    path = write(tmp_path, "organizations.csv", ORGANIZATIONS)
+    with Session(seeded) as session:
+        mock = session.scalars(select(Source).where(Source.kind == "mock")).first()
+        chosen, other = (Source(tenant_id=mock.tenant_id, kind="csv") for _ in range(2))
+        session.add_all([chosen, other])
+        session.commit()
+        chosen_id = str(chosen.id)
+
+    # Act
+    import_command.main(["--tenant", SLUG, "--kind", "organization", path, "--source", chosen_id])
+
+    # Assert
+    assert "succeeded" in printed(capsys)[0]
+    with Session(seeded) as session:
+        assert {str(run.source_id) for run in session.scalars(select(SyncRun))} == {chosen_id}
+
+
+def test_source_must_be_a_csv_source(seeded, tmp_path, capsys):
+    # Arrange
+    path = write(tmp_path, "organizations.csv", ORGANIZATIONS)
+    with Session(seeded) as session:
+        mock_id = str(session.scalars(select(Source.id).where(Source.kind == "mock")).first())
+
+    # Act
+    with pytest.raises(SystemExit) as exit_info:
+        import_command.main(["--tenant", SLUG, "--kind", "organization", path, "--source", mock_id])
+
+    # Assert
+    assert exit_info.value.code == 2
+    assert "has no source" in capsys.readouterr().err
+
+
 def test_the_sync_command_ignores_the_csv_source(seeded, mock_app, tmp_path, monkeypatch, capsys):
     # Arrange
     path = write(tmp_path, "organizations.csv", ORGANIZATIONS)
