@@ -24,8 +24,8 @@ repos:
     hooks:
       - id: ai-declarations
         name: AI contribution declarations
-        language: system
-        entry: python3 scripts/ai_declarations.py
+        language: python
+        entry: python scripts/ai_declarations.py
         pass_filenames: false
         always_run: true
       - id: prettier
