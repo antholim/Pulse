@@ -45,7 +45,7 @@ About 12 percent of organizations and 4 percent of people get a second record, s
 | `case` | `Transport Gosselin inc.` / `TRANSPORT GOSSELIN INC.` |
 | `hyphen` | `Groupe St-Pierre` / `Groupe St Pierre` |
 | `ampersand` | `Lévesque & Cloutier Avocats` / `Lévesque et Cloutier Avocats` |
-| `missing_domain`, `missing_linkedin`, `missing_crm_id` | the duplicate lacks that identifier |
+| `missing_domain`, `missing_linkedin`, `missing_crm_id` | the duplicate lacks that identifier (`missing_domain` clears contact website and email only; the media profile URL stays) |
 
 Some pairs still share a domain, LinkedIn URL or CRM id (Tier 1 can find them); others share none (only fuzzy matching can).
 
@@ -55,7 +55,10 @@ Some pairs still share a domain, LinkedIn URL or CRM id (Tier 1 can find them); 
 
 `omerlo_schema.py` defines each resource as a strict Pydantic model, for the detail and the list shapes; unknown fields fail validation. `--schemas DIR` exports them as JSON Schema.
 
-Shapes follow the [backoffice documentation](https://developers.omerlo.com/docs/backoffice). Two links are assumptions until checked on staging ([#23](https://github.com/antholim/Pulse/issues/23)): a session speaker's `actor_id` is a person id, and a project's `owner_id` is an organization id.
+Shapes follow the [backoffice documentation](https://developers.omerlo.com/docs/backoffice). Assumptions until checked on staging ([#23](https://github.com/antholim/Pulse/issues/23)):
+
+- A session speaker's `actor_id` is a person id, and a project's `owner_id` is an organization id.
+- `profile.canonical_url` is the record's page on the media site (for example `https://capitale.example/organisations/<slug>` for organizations and `.../personnes/<slug>` for people), not the organization's own website. The website and email domain live in `contact[]` only. Match the [Omerlo API](https://github.com/antholim/Pulse/wiki/Omerlo-API) wiki when you update staging findings.
 
 ## Mock Omerlo server
 
