@@ -1,0 +1,127 @@
+# Source files waiting for their authors' AI contribution declaration.
+# Add one with: python scripts/ai_declarations.py --add <none|below-50|50-or-more> FILE
+# then delete the file's line here. The check fails if a listed file already has one.
+# Files are grouped by the people who committed to them.
+
+# antholim
+discord-bots/team-bot/src/team_bot/__init__.py
+discord-bots/team-bot/src/team_bot/__main__.py
+discord-bots/team-bot/src/team_bot/bot.py
+discord-bots/team-bot/src/team_bot/cogs/__init__.py
+discord-bots/team-bot/src/team_bot/cogs/deadlines.py
+discord-bots/team-bot/src/team_bot/cogs/general.py
+discord-bots/team-bot/src/team_bot/cogs/meetings.py
+discord-bots/team-bot/src/team_bot/cogs/pr_summary.py
+discord-bots/team-bot/src/team_bot/cogs/review_routing.py
+discord-bots/team-bot/src/team_bot/cogs/run.py
+discord-bots/team-bot/src/team_bot/cogs/worklog.py
+discord-bots/team-bot/src/team_bot/config.py
+discord-bots/team-bot/src/team_bot/domain/__init__.py
+discord-bots/team-bot/src/team_bot/domain/deadlines.py
+discord-bots/team-bot/src/team_bot/domain/iterations.py
+discord-bots/team-bot/src/team_bot/domain/meetings.py
+discord-bots/team-bot/src/team_bot/domain/review_teams.py
+discord-bots/team-bot/src/team_bot/domain/story_points.py
+discord-bots/team-bot/src/team_bot/domain/worklog.py
+discord-bots/team-bot/src/team_bot/formatting.py
+discord-bots/team-bot/src/team_bot/services/__init__.py
+discord-bots/team-bot/src/team_bot/services/github.py
+discord-bots/team-bot/src/team_bot/services/storage.py
+discord-bots/team-bot/tests/conftest.py
+discord-bots/team-bot/tests/test_bot_commands.py
+discord-bots/team-bot/tests/test_config.py
+discord-bots/team-bot/tests/test_deadlines.py
+discord-bots/team-bot/tests/test_formatting.py
+discord-bots/team-bot/tests/test_github.py
+discord-bots/team-bot/tests/test_iterations.py
+discord-bots/team-bot/tests/test_jobs.py
+discord-bots/team-bot/tests/test_meetings.py
+discord-bots/team-bot/tests/test_review_routing.py
+discord-bots/team-bot/tests/test_review_teams.py
+discord-bots/team-bot/tests/test_storage.py
+discord-bots/team-bot/tests/test_story_points.py
+discord-bots/team-bot/tests/test_worklog.py
+discord-bots/team-bot/tests/tests_support.py
+
+# Mohamad Addasi
+backend/app/ingestion/omerlo/mapping/batch.py
+backend/app/ingestion/omerlo/mapping/fields.py
+backend/app/ingestion/omerlo/mapping/mappers.py
+backend/app/models/base.py
+backend/app/models/changes.py
+backend/app/models/resolution.py
+backend/app/seed.py
+backend/tests/ingestion/omerlo/mapping/payloads.py
+backend/tests/ingestion/omerlo/mapping/test_batch.py
+backend/tests/ingestion/omerlo/mapping/test_mappers.py
+backend/tests/integration/conftest.py
+backend/tests/integration/test_constraints.py
+backend/tests/integration/test_migrations.py
+backend/tests/integration/test_seed.py
+backend/tests/models/test_schema.py
+backend/tests/test_seed.py
+
+# mijanullah12
+backend/app/core/logging.py
+backend/app/core/request_context.py
+backend/app/schemas/errors.py
+backend/tests/core/test_errors.py
+backend/tests/core/test_logging.py
+backend/tests/core/test_request_context.py
+backend/tests/test_main.py
+frontend/src/components/ErrorBoundary.test.tsx
+frontend/src/components/ErrorBoundary.tsx
+frontend/src/components/ErrorMessage.test.tsx
+frontend/src/components/ErrorMessage.tsx
+frontend/src/services/errors.test.ts
+frontend/src/services/errors.ts
+frontend/src/services/logger.test.ts
+frontend/src/services/logger.ts
+
+# AbdelrahmanWM, mijanullah12
+backend/app/core/errors.py
+backend/tests/conftest.py
+frontend/src/App.test.tsx
+frontend/src/services/api.test.ts
+
+# AbdelrahmanWM, mijanullah12, TristanGirardi, Youssef Youssef
+backend/tests/test_health.py
+frontend/src/App.tsx
+frontend/src/services/api.ts
+
+# TristanGirardi
+backend/app/processing/cleaning.py
+backend/app/processing/cleaning_config.py
+backend/tests/test_cleaning.py
+
+# AbdelrahmanWM, Mohamad Addasi
+backend/app/models/records.py
+backend/app/models/tenancy.py
+
+# Andrew Ungureanu
+backend/app/core/security.py
+backend/tests/core/test_security.py
+
+# AbdelrahmanWM, Andrew Ungureanu, mijanullah12, TristanGirardi, Youssef Youssef
+backend/app/main.py
+
+# AbdelrahmanWM, Mohamad Addasi, Youssef Youssef
+scripts/tickets/data.py
+
+# AbdelrahmanWM, TristanGirardi, Youssef Youssef
+backend/app/core/database.py
+
+# AbdelrahmanWM, Youssef Youssef
+scripts/tickets/build.py
+
+# Hendrik Tebeng, Mohamad Addasi
+backend/tests/processing/test_normalization.py
+
+# Hendrik Tebeng, Mohamad Addasi, TristanGirardi
+backend/app/processing/normalization.py
+
+# Mohamad Addasi, TristanGirardi
+backend/app/models/__init__.py
+
+# mijanullah12, TristanGirardi, Youssef Youssef
+frontend/src/main.tsx

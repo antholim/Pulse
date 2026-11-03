@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Raw payload archive: payloads are stored as received, under their tenant's key prefix.
 
 Keys look like `tenants/<tenant_id>/runs/<sync_run_id>/<entity_kind>/<sha256>.json`.

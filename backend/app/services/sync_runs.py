@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Run one sync of a source: fetch, archive, map and store versions, recorded as a sync_run."""
 
 from collections.abc import Callable, Iterable

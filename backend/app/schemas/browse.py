@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 import uuid
 from datetime import datetime
 from typing import Any

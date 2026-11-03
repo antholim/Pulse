@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Sync runs against the mock Omerlo server and a real database."""
 
 from datetime import UTC, datetime, timedelta

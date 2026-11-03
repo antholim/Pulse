@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Archiving a run's payloads writes raw_record rows that reprocessing reads back."""
 
 from datetime import UTC, datetime

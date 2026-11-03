@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 import pytest
 
 from synthetic.fixture_loader import read_json

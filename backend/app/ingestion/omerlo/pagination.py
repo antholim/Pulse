@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Pagination for the Omerlo backoffice API.
 
 List endpoints answer with `{"data": [...], "meta": {"base", "next", "previous"}}`,

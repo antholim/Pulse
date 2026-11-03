@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 from pydantic import HttpUrl, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

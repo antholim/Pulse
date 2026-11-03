@@ -1,3 +1,4 @@
+# AI contribution: 50% or more AI-generated
 """Change detection against a real database, driven by the fixture mutation script."""
 
 from datetime import UTC, datetime, timedelta

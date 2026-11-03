@@ -1,3 +1,4 @@
+// AI contribution: 50% or more AI-generated
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
