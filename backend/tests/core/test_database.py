@@ -24,3 +24,29 @@ def test_engine_is_created_once(monkeypatch):
 
     assert database.get_engine() is database.get_engine()
     assert database.get_session_factory().kw["bind"] is database.get_engine()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgres://user:pass@pulse-db.flycast:5432/pulse",
+        "postgresql://user:pass@pulse-db.flycast:5432/pulse",
+        "postgresql+psycopg://user:pass@pulse-db.flycast:5432/pulse",
+    ],
+)
+def test_plain_postgres_urls_use_the_psycopg_driver(url):
+    # Act / Assert
+    assert (
+        database.sqlalchemy_url(url) == "postgresql+psycopg://user:pass@pulse-db.flycast:5432/pulse"
+    )
+
+
+def test_engine_accepts_the_postgres_scheme(monkeypatch):
+    # Arrange
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/pulse")
+
+    # Act
+    engine = database.get_engine()
+
+    # Assert
+    assert engine.url.drivername == "postgresql+psycopg"

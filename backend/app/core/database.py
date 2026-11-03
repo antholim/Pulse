@@ -15,6 +15,14 @@ class DatabaseNotConfiguredError(RuntimeError):
     """DATABASE_URL is missing, so no connection can be made."""
 
 
+def sqlalchemy_url(url: str) -> str:
+    """Point plain Postgres URLs, like the postgres:// one Fly.io sets, at the psycopg driver."""
+    for scheme in ("postgres://", "postgresql://"):
+        if url.startswith(scheme):
+            return "postgresql+psycopg://" + url.removeprefix(scheme)
+    return url
+
+
 # Created on first use, so importing the app (for example in tests) does not
 # require DATABASE_URL.
 @cache
@@ -22,7 +30,7 @@ def get_engine() -> Engine:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise DatabaseNotConfiguredError("DATABASE_URL is not set; see .env.example")
-    return create_engine(database_url, pool_pre_ping=True)
+    return create_engine(sqlalchemy_url(database_url), pool_pre_ping=True)
 
 
 @cache
