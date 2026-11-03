@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
@@ -187,3 +189,23 @@ def test_max_request_bytes_rejects_zero(monkeypatch):
     # Act / Assert
     with pytest.raises(ValueError, match="positive"):
         max_request_bytes()
+
+
+def test_disconnect_messages_pass_through_the_size_limit():
+    # Arrange
+    received = []
+
+    async def app(scope, receive, send):
+        received.append(await receive())
+
+    async def receive():
+        return {"type": "http.disconnect"}
+
+    middleware = RequestSizeLimitMiddleware(app, max_bytes=10)
+    scope = {"type": "http", "method": "POST", "path": "/", "headers": []}
+
+    # Act
+    asyncio.run(middleware(scope, receive, None))
+
+    # Assert
+    assert received == [{"type": "http.disconnect"}]
