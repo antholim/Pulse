@@ -42,6 +42,10 @@ CONNECTOR_TOKEN = "and"
 CONNECTOR_ALIASES = frozenset({"&", "et", "and"})
 
 _LEGAL_SUFFIXES_PATH = Path(__file__).with_name("legal_suffixes.toml")
+_CITY_ALIASES_PATH = Path(__file__).with_name("city_aliases.toml")
+
+# Abbreviated words in place names, spelled out so St-Georges and Saint-Georges share a key.
+CITY_ABBREVIATIONS = {"st": "saint", "ste": "sainte"}
 
 # Punctuation and symbols become spaces before whitespace is collapsed.
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -189,6 +193,54 @@ def normalize_text(value: str | None) -> str | None:
 def normalize_person_name(value: str | None) -> str | None:
     """Return a comparison key for a person full name, or None if unusable."""
     return normalize_text(value)
+
+
+def _city_key(value: str | None) -> str | None:
+    """Text key with ``St`` and ``Ste`` spelled out, before aliases are applied."""
+    key = normalize_text(value)
+    if key is None:
+        return None
+    return " ".join(CITY_ABBREVIATIONS.get(token, token) for token in key.split(" "))
+
+
+@lru_cache(maxsize=1)
+def _load_city_aliases() -> dict[str, str]:
+    """Load ``city_aliases.toml`` once, as the key of every name to the key of its city."""
+    with _CITY_ALIASES_PATH.open("rb") as handle:
+        data = tomllib.load(handle)
+    raw_aliases = data.get("aliases")
+    if not isinstance(raw_aliases, dict) or not raw_aliases:
+        raise ValueError(f"{_CITY_ALIASES_PATH.name} must define a non-empty aliases table")
+
+    aliases: dict[str, str] = {}
+    for city, names in raw_aliases.items():
+        city_key = _city_key(city)
+        if city_key is None or not isinstance(names, list):
+            raise ValueError(f"invalid city in {_CITY_ALIASES_PATH.name}: {city!r}")
+        for name in (city, *names):
+            alias = _city_key(name) if isinstance(name, str) else None
+            # One name for two cities would merge organizations on a guess.
+            if alias is None or aliases.get(alias, city_key) != city_key:
+                raise ValueError(f"invalid alias in {_CITY_ALIASES_PATH.name}: {name!r}")
+            aliases[alias] = city_key
+    return aliases
+
+
+def city_aliases() -> dict[str, str]:
+    """Public read-only view of the loaded city aliases."""
+    return dict(_load_city_aliases())
+
+
+def normalize_city(value: str | None) -> str | None:
+    """Return a comparison key for a city, or None if unusable.
+
+    Accents, case and hyphens are folded, ``St``/``Ste`` spelled out, and known aliases
+    mapped to one key: ``Ville de Québec`` and ``Quebec City`` both become ``quebec``.
+    """
+    key = _city_key(value)
+    if key is None:
+        return None
+    return _load_city_aliases().get(key, key)
 
 
 @lru_cache(maxsize=1)
