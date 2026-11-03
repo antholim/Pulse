@@ -5,7 +5,7 @@ Shared skills for AI agents, one folder each under `skills/`.
 ## ai-checklist
 
 `skills/ai-checklist/SKILL.md` is an agent skill that checks your branch, commits and pull request against the
-SOEN 490 AI-use rules (`AI_USAGE.md` and `docs/writing-prs-and-issues.md`), and
+SOEN 490 AI-use rules (`docs/AI_USAGE.md` and `docs/writing-prs-and-issues.md`), and
 helps you add your own AI declarations.
 
 It only declares files you wrote, asks you the level for each one, and changes
@@ -15,9 +15,8 @@ nothing on GitHub without your yes.
 
 You need Python 3, the GitHub CLI signed in (`gh auth status`), and Claude Code.
 
-Your branch must contain `scripts/ai_declarations.py` and `AI_USAGE.md`. They
-come from `feature/67-demo-page` (#135); until that branch is merged into
-`main`, branch from it or merge it into your branch.
+Your branch must contain `scripts/ai_declarations.py` and `docs/AI_USAGE.md`,
+so update it from `main` first if it is older.
 
 On Windows, type `python` where these steps say `python3`.
 
@@ -75,7 +74,7 @@ On Windows, type `python` where these steps say `python3`.
 6. **Approve the pull request text.** The agent shows the "AI assistance"
    section it drafted. Say yes to post it, or tell it what to change.
 
-7. **Add your feature to `AI_USAGE.md`** if AI helped substantially. The agent
+7. **Add your feature to `docs/AI_USAGE.md`** if AI helped substantially. The agent
    asks what the AI got wrong and what you rejected, and drafts the entry.
 
 8. **Commit and push.** End the commit with your AI acknowledgment line and no

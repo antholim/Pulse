@@ -1,11 +1,11 @@
 ---
 name: ai-checklist
-description: Use when the user asks to check a PULSE branch, commits, or pull request against the SOEN 490 AI-use rules, to add or fix AI-contribution declarations, to fill in a pull request's AI assistance section or AI_USAGE.md, or to backfill their own declarations for earlier work.
+description: Use when the user asks to check a PULSE branch, commits, or pull request against the SOEN 490 AI-use rules, to add or fix AI-contribution declarations, to fill in a pull request's AI assistance section or docs/AI_USAGE.md, or to backfill their own declarations for earlier work.
 ---
 
 # Check and fix AI-use declarations
 
-PULSE's AI-use rules are in `AI_USAGE.md` under "How we declare AI contribution" and in `docs/writing-prs-and-issues.md` (commits, pull requests, issues). The rubric behind them is section 8 of the SOEN 490 Code Quality Rubric. Read both files before starting; when this skill disagrees with them, they win.
+PULSE's AI-use rules are in `docs/AI_USAGE.md` under "How we declare AI contribution" and in `docs/writing-prs-and-issues.md` (commits, pull requests, issues). The rubric behind them is section 8 of the SOEN 490 Code Quality Rubric. Read both files before starting; when this skill disagrees with them, they win.
 
 ## Ground rules
 
@@ -68,7 +68,7 @@ Draft the "AI assistance" section of `.github/pull_request_template.md`:
 
 Show the full updated description, then update it with `gh pr edit <number> --body-file <file>` only after the user agrees.
 
-## 5. Update AI_USAGE.md
+## 5. Update docs/AI_USAGE.md
 
 When the PR implements a substantive feature with substantial AI assistance:
 
@@ -82,6 +82,6 @@ When the user wants to catch up on earlier declarations:
 
 1. Run the check with `--report` and keep the pending files the user mainly wrote (step 2). Go through them in small batches, asking the level for each, and commit them on a branch for the backfill issue.
 2. Find the user's merged pull requests: `gh pr list --author @me --state merged --limit 100 --json number,title,body,headRefName`. For each feature or bug PR whose description lacks the AI assistance section, draft it as in step 4. Edit each PR only after the user agrees to that PR's text.
-3. Draft `AI_USAGE.md` entries for the user's features as in step 5.
+3. Draft `docs/AI_USAGE.md` entries for the user's features as in step 5.
 
 Finish with a summary: files declared, files left for other authors, PRs updated, and anything the user chose to skip.

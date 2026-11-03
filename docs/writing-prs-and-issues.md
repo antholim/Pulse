@@ -48,7 +48,7 @@ Use `.github/pull_request_template.md` and keep its sections:
   - `AI-assisted files:` the files that AI substantially helped with.
   - One plain sentence saying which tool helped and with what.
   - Keep it consistent with the declarations at the top of those files and with
-    `AI_USAGE.md`.
+    `docs/AI_USAGE.md`.
 - **No "Generated with ..." footer** and no `Co-Authored-By` line.
 
 ## Issues
