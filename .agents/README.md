@@ -15,6 +15,12 @@ nothing on GitHub without your yes.
 
 You need Python 3, the GitHub CLI signed in (`gh auth status`), and Claude Code.
 
+Your branch must contain `scripts/ai_declarations.py` and `AI_USAGE.md`. They
+come from `feature/67-demo-page` (#135); until that branch is merged into
+`main`, branch from it or merge it into your branch.
+
+On Windows, type `python` where these steps say `python3`.
+
 ### Steps
 
 1. **Go to the repo root and switch to your branch.**
@@ -31,6 +37,15 @@ You need Python 3, the GitHub CLI signed in (`gh auth status`), and Claude Code.
    mkdir -p .claude/skills
    ln -s ../../.agents/skills/ai-checklist .claude/skills/ai-checklist
    ```
+
+   On Windows (PowerShell), use a junction instead, which needs no admin rights:
+
+   ```powershell
+   New-Item -ItemType Directory -Force .claude\skills
+   cmd /c mklink /J .claude\skills\ai-checklist .agents\skills\ai-checklist
+   ```
+
+   The link is in `.gitignore`, so it is never committed.
 
 3. **Start Claude Code and run the skill.**
 
@@ -87,5 +102,6 @@ follow it. Or do it by hand:
 python3 scripts/ai_declarations.py                                # files missing a declaration
 python3 scripts/ai_declarations.py --report                       # coverage and pending files
 python3 scripts/ai_declarations.py --add below-50 <file>          # declare one of your files
+# then delete that file's line from scripts/ai_declarations_pending.txt, or the check fails
 git log --format='%h %s%n%b' origin/main..HEAD                    # check each commit's AI line
 ```
