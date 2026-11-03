@@ -80,3 +80,20 @@ def test_unknown_kind_is_rejected():
 
     # Assert
     assert response.status_code == 422
+
+
+def test_overlong_external_id_is_rejected():
+    # Arrange
+    app.dependency_overrides[browse_database] = lambda: None
+    client = TestClient(app)
+    path = f"/api/tenants/{uuid.uuid4()}/records/{uuid.uuid4()}/{'x' * 201}"
+
+    # Act
+    try:
+        response = client.get(path)
+    finally:
+        app.dependency_overrides.clear()
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["errors"][0]["location"] == ["path", "external_id"]
