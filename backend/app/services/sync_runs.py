@@ -4,12 +4,16 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Protocol
 
 from sqlalchemy.orm import Session
 
 from app.core.logging import logged_run
 from app.core.tenancy import bound_to_tenant
 from app.ingestion.connector import RawRecord, parse_timestamp
+from app.ingestion.files.connector import FileConnector
+from app.ingestion.files.mapping import map_rows
+from app.ingestion.mapped import MappingResult
 from app.ingestion.omerlo.connector import OmerloConnector
 from app.ingestion.omerlo.mapping.batch import map_records
 from app.models import Source, SyncRun
@@ -20,6 +24,8 @@ from app.storage.raw_records import archive_records
 
 COUNT_KEYS = ("fetched", "new", "changed", "unchanged", "removed", "failed")
 MAX_ERROR_LENGTH = 2000
+# Failures listed on the run with their reason; all of them are counted.
+MAX_REPORTED_FAILURES = 100
 
 # {workspace_id: {entity_kind: newest updated_at}}
 WorkspaceWatermarks = dict[str, dict[str, datetime]]
@@ -35,6 +41,45 @@ class Fetched:
     # Newest updated_at seen in the source-wide lists, and per workspace and kind.
     source_newest: datetime | None = None
     workspace_newest: WorkspaceWatermarks = field(default_factory=dict)
+    # Entity kinds a full run may mark removed; None means every kind of the source.
+    kinds: tuple[str, ...] | None = None
+    # Archived with the run but neither counted nor mapped, e.g. an imported file.
+    archive_only: list[RawRecord] = field(default_factory=list)
+
+
+class SourceReader(Protocol):
+    """Fetches a source's raw records for one run and maps them to source records."""
+
+    def fetch(self, source: Source, *, full: bool) -> Fetched: ...
+
+    def map(self, records: list[RawRecord]) -> MappingResult: ...
+
+
+@dataclass(frozen=True)
+class OmerloReader:
+    connector: OmerloConnector
+
+    def fetch(self, source: Source, *, full: bool) -> Fetched:
+        return fetch(self.connector, source, full=full)
+
+    def map(self, records: list[RawRecord]) -> MappingResult:
+        return map_records(records)
+
+
+@dataclass(frozen=True)
+class FileReader:
+    connector: FileConnector
+
+    def fetch(self, source: Source, *, full: bool) -> Fetched:
+        return Fetched(
+            records=list(self.connector.fetch_since(None)),
+            kinds=(self.connector.layout.kind,),
+            archive_only=[self.connector.file_record()],
+        )
+
+    def map(self, records: list[RawRecord]) -> MappingResult:
+        # Rejected rows count as failed, so a full import does not take them for removed.
+        return map_rows(records, rejected=self.connector.failures())
 
 
 def utc_now() -> datetime:
@@ -44,7 +89,7 @@ def utc_now() -> datetime:
 def run_sync(
     session: Session,
     source: Source,
-    connector: OmerloConnector,
+    reader: SourceReader,
     archive: PayloadArchive,
     *,
     full: bool = False,
@@ -72,12 +117,13 @@ def run_sync(
         try:
             with logged_run("sync", str(source.id), str(run.id)) as logged:
                 try:
-                    fetched = fetch(connector, source, full=full)
+                    fetched = reader.fetch(source, full=full)
                     counts["fetched"] = len(fetched.records)
-                    archive_records(session, archive, run, fetched.records)
+                    archived = [*fetched.records, *fetched.archive_only]
+                    archive_records(session, archive, run, archived)
                     # Kept even if storing fails, so the run can be reprocessed from the archive.
                     session.commit()
-                    counts.update(store(session, run, source, fetched, detect_changes))
+                    counts.update(store(session, run, source, fetched, reader, detect_changes))
                     finish(run, "succeeded", counts, now())
                     session.commit()
                 finally:
@@ -122,6 +168,7 @@ def store(
     run: SyncRun,
     source: Source,
     fetched: Fetched,
+    reader: SourceReader,
     detect_changes: ChangeDetector,
 ) -> dict[str, int]:
     """Map and store the fetched records as versions and advance the watermarks.
@@ -130,12 +177,19 @@ def store(
     two syncs of one source never write at the same time.
     """
     session.refresh(source, with_for_update=True)
-    mapped = map_records(fetched.records)
+    mapped = reader.map(fetched.records)
     run.counts = {**(run.counts or {}), "cleaning_flags": mapped.cleaning_flag_counts}
+    if mapped.failures:
+        run.counts["failures"] = [
+            {"id": failure.external_id, "reason": failure.reason}
+            for failure in mapped.failures[:MAX_REPORTED_FAILURES]
+        ]
     upserted = upsert_records(session, run, mapped.records)
     removed: list[str] = []
     if run.mode == "full":
-        removed = close_unseen(session, run, keep={f.external_id for f in mapped.failures})
+        removed = close_unseen(
+            session, run, keep={f.external_id for f in mapped.failures}, kinds=fetched.kinds
+        )
     # Reads the versions this run opened and closed, so it comes after both.
     detect_changes(session, run)
     advance_watermarks(source, fetched)

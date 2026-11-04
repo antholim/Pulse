@@ -5,7 +5,7 @@ import hashlib
 import json
 from typing import Any
 
-from app.ingestion.omerlo.mapping.mappers import MappedRecord
+from app.ingestion.mapped import MappedRecord
 
 # Bookkeeping fields that can move without the record's content changing.
 VOLATILE_KEYS = frozenset({"updated_at"})

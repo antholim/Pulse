@@ -106,6 +106,39 @@ It reads these endpoints (no authentication yet, so keep them local):
 | `GET /api/tenants/{tenant_id}/records?q=&kind=` | Current records matching a name |
 | `GET /api/tenants/{tenant_id}/records/{source_id}/{external_id}` | Every version of one record with its changes |
 
+## Importing CSV and JSON files
+
+`app.import_file` imports a file of organizations or people that is not available through Omerlo. An import is a sync run of the tenant's `csv` source (created on its first import), so it goes through the same archive, normalization, versioning and change detection as an Omerlo sync, and shows up on the sync runs page.
+
+```bash
+cd backend
+uv run python -m app.import_file --tenant demo-capitale --kind organization synthetic/samples/organizations.csv
+uv run python -m app.import_file --tenant demo-capitale --kind person synthetic/samples/people.json
+uv run python -m app.import_file --tenant demo-capitale --kind organization organizations.csv --full
+```
+
+The command prints the run's counts and every rejected row with its row number and reason. It exits with 2, and records no run, when the file itself cannot be imported (missing, not `.csv` or `.json`, not UTF-8, or without a required column), and with 1 when the run failed. `--source <id>` picks a csv source when the tenant has several; `app.sync` ignores csv sources.
+
+- **Default:** rows are added or updated; a record missing from the file stays as it is.
+- **`--full`:** the file is the complete list, so records of that kind missing from it are marked removed. Records of the other kind and records whose row was rejected are kept.
+- Re-importing an edited file records what changed, field by field, like a second sync.
+
+### File format
+
+Templates with the header row are in `backend/app/ingestion/files/templates/`. Column names are matched without case or surrounding spaces; other columns are kept in the record's attributes.
+
+| Kind | Columns (required in bold) |
+| --- | --- |
+| `organization` | **`id`**, **`name`**, `website`, `linkedin`, `email`, `phone`, `city`, `address` |
+| `person` | **`id`**, `first_name`, `last_name` (at least one of the two), `email`, `linkedin`, `job_title`, `organization_id` |
+
+- **CSV:** UTF-8 (with or without a byte order mark, as Excel's "CSV UTF-8" writes it), separated by commas or semicolons. Row numbers in messages are spreadsheet rows: the header is row 1.
+- **JSON:** a list of objects with the same keys. Numbers are read as text. Row numbers count entries from 1.
+- A row is rejected, and the others still imported, when it lacks a required value, reuses an `id` already used earlier in the file, or has a `website`, `linkedin`, `email` or `phone` that cannot be read as one.
+- `id` must stay the same between imports of the same data: it is what tells a changed row from a new one. Ids only need to be unique within one kind.
+
+The whole file is archived with the run (entity kind `import_file`), next to one raw record per valid row, so rejected rows can still be looked at later. Only synthetic sample files (`backend/synthetic/samples/`) are committed; real exports stay outside the repo.
+
 ## Raw payload archive
 
 Every payload a connector fetches is archived unchanged before any transformation (ADR D4), and a `raw_record` row stores its URI and SHA-256 hash (of the payload as JSON with sorted keys). The code is in `backend/app/storage/`.

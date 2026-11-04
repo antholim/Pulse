@@ -36,6 +36,7 @@ migrations, empty `__init__.py` files and `vite-env.d.ts` are excluded.
 | Tool | Used by | Used for |
 | --- | --- | --- |
 | Claude Code (Anthropic) | AbdelrahmanWM | Writing code and tests from issues, reviewing diffs, drafting PR descriptions and issues |
+| Cursor (agent mode) | mijanullah12 | Designing and writing the file import and its tests from issue #24, drafting commit messages and docs |
 
 ## Features built with substantial AI help
 
@@ -50,6 +51,7 @@ migrations, empty `__init__.py` files and `vite-env.d.ts` are excluded.
 | Change detection between sync runs | #60 | #125 |
 | Recorded incremental sync runs | #55 | #126 |
 | Sync runs page | #67 | #127 |
+| CSV and JSON file import | #24 | |
 
 ## Details
 
@@ -135,3 +137,34 @@ checked the page by hand after a real sync.
 - The generated test for a bad `kind` expected a 422 but got a 503, because
   FastAPI resolves the database dependency before validating the query. The
   test now overrides the dependency.
+
+### CSV and JSON file import (#24)
+
+Cursor's agent proposed the design and wrote the code and tests in eight
+commits: a reader interface so `run_sync` is no longer tied to Omerlo, the
+shared cleaning step, the CSV and JSON reader, row validation and mapping, the
+archive of the whole file (with migration 0007), the `app.import_file` command,
+and the end-to-end tests. I chose the behaviour on re-import (missing rows are
+only removed with `--full`) and kept the scope to a command, with the upload
+endpoint and screen left for later.
+
+**Verification:** unit tests in `tests/ingestion/files/`, `run_sync` tests with
+the file reader in `tests/services/test_sync_runs.py`, and integration tests on
+Postgres in `tests/integration/test_file_import.py` and
+`tests/integration/test_import_command.py` (changes on re-import, removal with
+`--full`, tenant isolation, 5,000 rows in about 3 seconds). I also imported the
+sample files in `synthetic/samples/` by hand.
+
+**Problems found during the design:**
+- `source_record` ids are only unique per source, not per kind, so an
+  organization and a person with the same id in one csv source would have
+  collided. Import ids are prefixed with their kind (`organization:42`).
+- A full import of an organizations file would have marked every person of the
+  same source as removed. `close_unseen()` now only removes the kinds the run
+  read.
+- Once a tenant had a csv source, `app.sync` would have stopped with "several
+  sources". It now only looks at Omerlo and mock sources.
+
+**Problem found:** the first command tests read the JSON log lines on stdout
+as the command's output. They now filter them out, as the sync command tests
+do.

@@ -292,6 +292,22 @@ def test_records_fetched_but_not_mapped_are_not_taken_for_removed(session, runs)
     assert versions(session, "org-1")[0].valid_to is None
 
 
+def test_removal_limited_to_some_kinds_leaves_the_other_kinds_current(session, runs):
+    # Arrange
+    first, second = runs.next(), runs.next()
+    person = MappedRecord(
+        kind="person", external_id="person-1", workspace_id="ws-1", name_normalized="jean roy"
+    )
+    upsert_records(session, first, [org("org-1"), person])
+
+    # Act
+    removed = close_unseen(session, second, kinds=["organization"])
+
+    # Assert
+    assert removed == ["org-1"]
+    assert versions(session, "person-1")[0].valid_to is None
+
+
 def test_removal_only_closes_records_of_the_runs_own_source(session, runs):
     # Arrange
     other = Runs(session, add_source(session, "Tenant B"))

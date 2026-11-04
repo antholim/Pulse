@@ -109,6 +109,27 @@ def test_the_same_payload_from_another_source_is_stored_separately(session, arch
     assert len(files(archive)) == 2
 
 
+def test_an_imported_file_is_archived_and_read_back_unchanged(session, archive):
+    # Arrange
+    tenant, source = add_tenant(session, "Tenant A")
+    run = add_run(session, source, 1)
+    text = "id,name\n1,Société Acme\n2,\n"
+    record = RawRecord(
+        "import_file",
+        "organizations.csv",
+        None,
+        {"filename": "organizations.csv", "format": "csv", "text": text},
+    )
+
+    # Act
+    archive_records(session, archive, run, [record])
+    [rebuilt] = read_run(session, archive, tenant.id, run.id)
+
+    # Assert
+    assert rebuilt == record
+    assert files(archive)[0].startswith(f"tenants/{tenant.id}/runs/{run.id}/import_file/")
+
+
 def test_another_tenant_cannot_read_a_runs_payloads(session, archive):
     # Arrange
     _, source_a = add_tenant(session, "Tenant A")

@@ -17,7 +17,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, json_column, one_of, same_tenant_fk, tenant_id_column, uuid_pk
 
 ENTITY_KINDS = ("organization", "person", "project", "event", "content")
-# Everything a connector yields: entities, reference data and companions of an entity.
+# Everything a connector yields: entities, reference data and companions of an entity,
+# and the whole file a file import read.
 RAW_ENTITY_KINDS = (
     *ENTITY_KINDS,
     "workspace",
@@ -28,6 +29,7 @@ RAW_ENTITY_KINDS = (
     "event_metadata",
     "event_session",
     "content_blocks",
+    "import_file",
 )
 
 CURRENT_VERSION = text("valid_to IS NULL")

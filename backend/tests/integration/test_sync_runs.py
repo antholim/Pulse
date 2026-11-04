@@ -14,7 +14,7 @@ from app.ingestion.omerlo.connector import OmerloConnector
 from app.models import RawRecord as RawRecordRow
 from app.models import RecordChange, Source, SourceRecord, SyncRun, Tenant
 from app.seed import seed
-from app.services.sync_runs import run_sync
+from app.services.sync_runs import OmerloReader, run_sync
 from app.storage.local import LocalArchive
 from synthetic.fixture_loader import load_fixtures
 from synthetic.mock_omerlo import api_key_for, create_app
@@ -90,8 +90,8 @@ def sync(session, source, client, archive):
     clock = Clock()
 
     def run(full: bool = False, **options) -> SyncRun:
-        connector = OmerloConnector(options.pop("client", client))
-        return run_sync(session, source, connector, archive, full=full, now=clock, **options)
+        reader = OmerloReader(OmerloConnector(options.pop("client", client)))
+        return run_sync(session, source, reader, archive, full=full, now=clock, **options)
 
     return run
 

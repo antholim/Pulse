@@ -1,0 +1,31 @@
+[
+  {
+    "id": "p-201",
+    "first_name": "Marie-Ève",
+    "last_name": "Tremblay",
+    "email": "marie-eve.tremblay@atelierboreal.qc.ca",
+    "job_title": "Directrice générale",
+    "organization_id": "101"
+  },
+  {
+    "id": "p-202",
+    "first_name": "Jean-François",
+    "last_name": "Gagnon",
+    "email": "jf.gagnon@fleuvevert.ca",
+    "linkedin": "https://www.linkedin.com/in/jf-gagnon-exemple",
+    "organization_id": "102"
+  },
+  {
+    "id": "p-203",
+    "first_name": "Amélie",
+    "last_name": "Côté",
+    "job_title": "Éditrice",
+    "organization_id": "103"
+  },
+  {
+    "id": "p-204",
+    "first_name": "",
+    "last_name": "",
+    "email": "sans.nom@studiomesange.ca"
+  }
+]

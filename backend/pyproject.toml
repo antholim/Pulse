@@ -101,6 +101,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "T20"]
 "synthetic/mutate.py" = ["T201"]
 "app/seed.py" = ["T201"]
 "app/sync.py" = ["T201"]
+"app/import_file.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

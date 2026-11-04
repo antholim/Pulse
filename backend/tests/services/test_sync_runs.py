@@ -8,11 +8,15 @@ import httpx
 import pytest
 
 from app.ingestion.connector import RawRecord
+from app.ingestion.files.connector import FileConnector
+from app.ingestion.mapped import MappedRecord, MappingResult
 from app.models import Source
 from app.services import sync_runs
 from app.services.source_records import UpsertResult
 from app.services.sync_runs import (
     Fetched,
+    FileReader,
+    OmerloReader,
     advance_watermarks,
     fetch,
     read_watermarks,
@@ -168,9 +172,9 @@ def clock():
     return lambda: next(moments)
 
 
-def org_connector():
+def org_reader():
     records = [raw("organization", "o1", T1)]
-    return FakeConnector(community={("organization", "ws-1"): records})
+    return OmerloReader(FakeConnector(community={("organization", "ws-1"): records}))
 
 
 def test_a_successful_run_records_its_counts_and_advances_the_watermarks(session, stored):
@@ -182,7 +186,7 @@ def test_a_successful_run_records_its_counts_and_advances_the_watermarks(session
     run = run_sync(
         session,
         target,
-        org_connector(),
+        org_reader(),
         archive=None,
         full=True,
         now=clock(),
@@ -210,7 +214,7 @@ def test_an_incremental_run_never_marks_records_removed(session, stored):
     _, _, close = stored
 
     # Act
-    run = run_sync(session, source(), org_connector(), archive=None, now=clock())
+    run = run_sync(session, source(), org_reader(), archive=None, now=clock())
 
     # Assert
     assert (run.mode, run.counts["removed"]) == ("incremental", 0)
@@ -224,7 +228,7 @@ def test_a_fetch_error_fails_the_run_and_stores_nothing(session, stored):
     connector = FakeConnector(error=httpx.ConnectError("connection refused"))
 
     # Act
-    run = run_sync(session, target, connector, archive=None, now=clock())
+    run = run_sync(session, target, OmerloReader(connector), archive=None, now=clock())
 
     # Assert
     assert run.status == "failed"
@@ -243,7 +247,7 @@ def test_a_storage_error_keeps_only_the_fetched_count(session, stored):
     upsert.side_effect = RuntimeError("x" * 5000)
 
     # Act
-    run = run_sync(session, source(), org_connector(), archive=None, now=clock())
+    run = run_sync(session, source(), org_reader(), archive=None, now=clock())
 
     # Assert
     assert run.status == "failed"
@@ -256,10 +260,104 @@ def test_cleaning_counts_are_persisted_and_only_unique_records_reach_storage(ses
     record = raw("organization", "o1", T1)
     connector = FakeConnector(community={("organization", "ws-1"): [record, record]})
 
-    run = run_sync(session, source(), connector, archive=None, now=clock())
+    run = run_sync(session, source(), OmerloReader(connector), archive=None, now=clock())
 
     assert run.status == "succeeded"
     assert run.counts["cleaning_flags"] == {"duplicate in current batch": 1}
+    assert len(upsert.call_args.args[2]) == 1
+
+
+class FakeReader:
+    """A source that is not Omerlo: fixed records, mapped by a fixed result."""
+
+    def __init__(self, records, mapped, kinds=None):
+        self.records = records
+        self.mapped = mapped
+        self.kinds = kinds
+
+    def fetch(self, source, *, full):
+        return Fetched(records=list(self.records), kinds=self.kinds)
+
+    def map(self, records):
+        return self.mapped
+
+
+def test_any_reader_can_feed_a_sync_run(session, stored):
+    # Arrange
+    _, upsert, _ = stored
+    mapped = MappedRecord(
+        kind="organization", external_id="f1", workspace_id=None, name_normalized="acme"
+    )
+    reader = FakeReader([raw("organization", "f1")], MappingResult((mapped,), ()))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, now=clock())
+
+    # Assert
+    assert run.status == "succeeded"
+    assert upsert.call_args.args[2] == (mapped,)
+    assert run.counts["fetched"] == 1
+
+
+def test_a_full_run_only_removes_records_of_the_kinds_it_read(session, stored):
+    # Arrange
+    _, _, close = stored
+    reader = FakeReader([], MappingResult((), ()), kinds=("person",))
+
+    # Act
+    run_sync(session, source(), reader, archive=None, full=True, now=clock())
+
+    # Assert
+    assert close.call_args.kwargs["kinds"] == ("person",)
+
+
+def test_a_file_import_counts_rejected_rows_and_never_removes_them(session, stored):
+    # Arrange
+    _, upsert, close = stored
+    data = b"id,name,email\n1,Acme,info@acme.ca\n2,Beta,not-an-email\n"
+    reader = FileReader(FileConnector(data, "organizations.csv", "organization"))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, full=True, now=clock())
+
+    # Assert
+    assert run.status == "succeeded"
+    assert run.counts["fetched"] == 1
+    assert run.counts["failed"] == 1
+    assert [r.external_id for r in upsert.call_args.args[2]] == ["organization:1"]
+    assert close.call_args.kwargs == {"keep": {"organization:2"}, "kinds": ("organization",)}
+    assert run.counts["failures"] == [
+        {"id": "organization:2", "reason": "row 3: email is not an email address"}
+    ]
+
+
+def test_only_the_first_failures_are_kept_on_the_run(session, stored):
+    # Arrange
+    rows = "".join(f"{n},Org {n},bad\n" for n in range(sync_runs.MAX_REPORTED_FAILURES + 5))
+    data = ("id,name,email\n" + rows).encode()
+    reader = FileReader(FileConnector(data, "organizations.csv", "organization"))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, now=clock())
+
+    # Assert
+    assert run.counts["failed"] == sync_runs.MAX_REPORTED_FAILURES + 5
+    assert len(run.counts["failures"]) == sync_runs.MAX_REPORTED_FAILURES
+
+
+def test_a_file_import_archives_the_file_without_counting_or_mapping_it(session, stored):
+    # Arrange
+    archive, upsert, _ = stored
+    data = b"id,name\n1,Acme\n"
+    reader = FileReader(FileConnector(data, "organizations.csv", "organization"))
+
+    # Act
+    run = run_sync(session, source(), reader, archive=None, now=clock())
+
+    # Assert
+    archived = archive.call_args.args[3]
+    assert [r.entity_kind for r in archived] == ["organization", "import_file"]
+    assert run.counts["fetched"] == 1
     assert len(upsert.call_args.args[2]) == 1
 
 
@@ -276,7 +374,7 @@ def test_required_cleaning_failure_does_not_abort_sync_or_remove_stored_record(s
     )
 
     # Act
-    run = run_sync(session, source(), connector, archive=None, full=True, now=clock())
+    run = run_sync(session, source(), OmerloReader(connector), archive=None, full=True, now=clock())
 
     # Assert
     assert run.status == "succeeded"
